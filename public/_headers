@@ -19,3 +19,7 @@
 
 /vendor/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The service worker: always revalidated, so a new deploy is picked up on the next visit.
+/sw.js
+  Cache-Control: no-cache
