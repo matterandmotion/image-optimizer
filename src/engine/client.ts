@@ -16,13 +16,15 @@ export class CancelledError extends Error {
 
 /**
  * Main-thread handle to the image engine worker (wasm-vips + jSquash AVIF).
- * Processes one request at a time per instance.
+ * Requests run one at a time, in call order. Use separate instances for parallel work.
  */
 export class Engine {
   private worker: Worker | null = null
   private ready: Promise<EngineInfo> | null = null
   private pending = new Map<number, Pending>()
   private seq = 0
+  private queue: Promise<unknown> = Promise.resolve()
+  private generation = 0
 
   /** Loads the WASM modules. Called implicitly by `probe` and `process`. */
   init(): Promise<EngineInfo> {
@@ -33,29 +35,48 @@ export class Engine {
     return this.ready
   }
 
-  async probe(file: Blob): Promise<SourceInfo> {
-    await this.init()
-    const buf = await file.arrayBuffer()
-    return this.call('probe', { buf }, [buf])
+  probe(file: Blob): Promise<SourceInfo> {
+    return this.enqueue(async () => {
+      await this.init()
+      const buf = await file.arrayBuffer()
+      return this.call('probe', { buf }, [buf])
+    })
   }
 
-  async process(
+  process(
     file: Blob,
     specs: VariantSpec[],
     onProgress?: (done: number, total: number) => void,
   ): Promise<EncodedVariant[]> {
-    await this.init()
-    const buf = await file.arrayBuffer()
-    return this.call('process', { buf, specs }, [buf], onProgress)
+    return this.enqueue(async () => {
+      await this.init()
+      const buf = await file.arrayBuffer()
+      return this.call('process', { buf, specs }, [buf], onProgress)
+    })
   }
 
-  /** Stops all work immediately. The next call starts a fresh worker. */
+  /**
+   * Stops all work immediately: the running request and every queued one reject with
+   * `CancelledError`. The next call starts a fresh worker.
+   */
   cancel() {
+    this.generation++
     this.worker?.terminate()
     this.worker = null
     this.ready = null
     for (const p of this.pending.values()) p.reject(new CancelledError())
     this.pending.clear()
+  }
+
+  /** Runs `task` once every earlier request has settled, unless `cancel()` happens first. */
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const generation = this.generation
+    const run = this.queue.then(() => {
+      if (generation !== this.generation) throw new CancelledError()
+      return task()
+    })
+    this.queue = run.catch(() => {})
+    return run
   }
 
   private get w(): Worker {
