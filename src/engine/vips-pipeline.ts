@@ -21,13 +21,14 @@ const JPEG = {
   keep: 'none',
 }
 
-/** Reads the header only. */
+/** Reads the header, then classifies the content (decoding a small sample, except for JPEG). */
 export function probe(vips: VipsModule, buf: Uint8Array): SourceInfo {
   const im = vips.Image.newFromBuffer(buf, '', { access: 'sequential' })
+  let header: Omit<SourceInfo, 'kind'>
   try {
     const orientation = im.getTypeof('orientation') ? im.getInt('orientation') : 1
     const swap = SWAPS_AXES.has(orientation)
-    return {
+    header = {
       width: swap ? im.height : im.width,
       height: swap ? im.width : im.height,
       hasAlpha: im.hasAlpha(),
@@ -36,6 +37,39 @@ export function probe(vips: VipsModule, buf: Uint8Array): SourceInfo {
       hasProfile: im.getTypeof('icc-profile-data') !== 0,
       orientation,
     }
+  } finally {
+    im.delete()
+  }
+  return { ...header, kind: header.loader.startsWith('jpegload') ? 'photo' : classify(vips, buf) }
+}
+
+/**
+ * Photo or flat-colour graphic, from a nearest-neighbour sample (no blending, so flat areas
+ * stay flat). Photos measured 40–72% unique colours and <10% identical neighbours; graphics
+ * and UI screenshots measured <2% and >90%.
+ */
+export function classify(vips: VipsModule, buf: Uint8Array): 'photo' | 'graphic' {
+  let im = vips.Image.newFromBuffer(buf, '', { access: 'sequential' })
+  if (im.width > 256) im = step(im, im.resize(256 / im.width, { kernel: 'nearest' }))
+  if (im.format !== 'uchar') im = step(im, im.colourspace('srgb'))
+  if (im.format !== 'uchar') im = step(im, im.cast('uchar'))
+  try {
+    const px = im.writeToMemory() as Uint8Array
+    const { width, height, bands } = im
+    const colour = (i: number) =>
+      bands >= 3 ? (px[i] << 16) | (px[i + 1] << 8) | px[i + 2] : px[i]
+    const colours = new Set<number>()
+    let same = 0
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * bands
+        const c = colour(i)
+        colours.add(c)
+        if (x > 0 && c === colour(i - bands)) same++
+      }
+    const flat = same / Math.max(1, (width - 1) * height)
+    const unique = colours.size / (width * height)
+    return flat > 0.5 || unique < 0.05 ? 'graphic' : 'photo'
   } finally {
     im.delete()
   }

@@ -1,40 +1,19 @@
 <script lang="ts">
   import { formatBytes, formatList } from './lib/format'
-  import {
-    ROLE_WIDTHS,
-    type Mode,
-    type PlanSettings,
-    type QualityLevel,
-    type Role,
-  } from './lib/plan'
+  import { ROLE_WIDTHS, type PlanSettings, type Role } from './lib/plan'
   import { App } from './ui/app.svelte'
   import FileRow from './ui/FileRow.svelte'
   import { filesFromDataTransfer, save } from './ui/files'
+  import { copy, MASTER_WIDTHS, MODES, QUALITIES, ROLES } from './ui/options'
   import Segmented from './ui/Segmented.svelte'
   import Select from './ui/Select.svelte'
 
   const app = new App()
 
-  const MODES: { value: Mode; label: string }[] = [
-    { value: 'responsive', label: 'Responsive set' },
-    { value: 'master', label: 'CMS master' },
-  ]
-  const ROLES: { value: Role; label: string }[] = [
-    { value: 'hero', label: 'Hero' },
-    { value: 'content', label: 'Content' },
-    { value: 'card', label: 'Card' },
-    { value: 'graphic', label: 'Graphic' },
-  ]
-  const QUALITIES: { value: QualityLevel; label: string }[] = [
-    { value: 'small', label: 'Lower' },
-    { value: 'balanced', label: 'Balanced' },
-    { value: 'high', label: 'Higher' },
-  ]
-  const MASTER_WIDTHS = [1920, 2560, 3840].map((w) => ({ value: w, label: `${w} px` }))
-
   let input: HTMLInputElement
   let dragging = $state(false)
   let zipping = $state(false)
+  let copied = $state(false)
 
   const summary = $derived(describe(app.settings))
   const totals = $derived(app.totals)
@@ -44,11 +23,20 @@
 
   function describe(s: PlanSettings): string {
     if (s.mode === 'master')
-      return `One high-quality JPEG up to ${s.masterWidth} px wide (PNG if transparent), for a CMS or site builder that makes its own sizes.`
-    const widths = formatList(ROLE_WIDTHS[s.role])
+      return `One file per image, up to ${s.masterWidth} px wide: high-quality JPEG for photos, PNG for graphics and transparent images. For a CMS or site builder that makes its own sizes.`
+    const set = (role: Role, format: string) =>
+      `${formatList(ROLE_WIDTHS[role])} px versions as ${format}`
+    const graphics = set('graphic', 'lossless WebP with a PNG fallback')
     return s.role === 'graphic'
-      ? `${widths} px versions as lossless WebP, with PNG as the fallback.`
-      : `${widths} px versions as AVIF, with JPEG as the fallback. Never larger than the original.`
+      ? `${graphics}. Never larger than the original.`
+      : `Photos: ${set(s.role, 'AVIF with a JPEG fallback')}. Graphics and screenshots: ${graphics}. Never larger than the original.`
+  }
+
+  async function copyAll() {
+    if (await copy(app.allHtml())) {
+      copied = true
+      setTimeout(() => (copied = false), 1500)
+    }
   }
 
   async function downloadZip() {
@@ -157,6 +145,11 @@
       {/if}
       <span class="flex-1"></span>
       <button type="button" class={secondary} onclick={() => input.click()}>Add images</button>
+      {#if app.settings.mode === 'responsive'}
+        <button type="button" class={secondary} disabled={!done || pending > 0} onclick={copyAll}>
+          {copied ? 'Copied' : 'Copy HTML'}
+        </button>
+      {/if}
       <button
         type="button"
         class={primary}
@@ -169,36 +162,34 @@
 
     <p class="mt-3 text-sm text-neutral-500">{summary}</p>
 
-    <!-- Fixed column widths, so nothing shifts while files process. -->
+    <!-- Fixed column widths (set on the header cells), so nothing shifts while files process. -->
     <table class="mt-4 w-full table-fixed text-sm">
-      <colgroup>
-        <col />
-        <col class="hidden w-32 sm:table-column" />
-        <col class="hidden w-24 sm:table-column" />
-        <col class="w-20 sm:w-24" />
-        <col class="hidden w-20 sm:table-column" />
-        <col class="w-28 sm:w-36" />
-        <col class="w-9" />
-      </colgroup>
       <thead class="text-neutral-500">
         <tr class="border-b border-neutral-200 dark:border-neutral-800">
           <th class="py-2 pr-3 text-left font-medium">File</th>
-          <th class="hidden px-3 text-right font-medium sm:table-cell">Dimensions</th>
-          <th class="hidden px-3 text-right font-medium sm:table-cell">Original</th>
+          <th class="hidden w-24 px-3 text-right font-medium sm:table-cell">Original</th>
           <th
-            class="px-3 text-right font-medium"
+            class="w-20 px-3 text-right font-medium sm:w-24"
             title="The file a browser downloads at the largest size"
           >
             Largest
           </th>
-          <th class="hidden px-3 text-right font-medium sm:table-cell">Saved</th>
-          <th class="pl-3 text-left font-medium">Status</th>
-          <th><span class="sr-only">Remove</span></th>
+          <th class="hidden w-20 px-3 text-right font-medium sm:table-cell">Saved</th>
+          <th class="w-20 pl-3 text-left font-medium sm:w-36">Status</th>
+          <th class="w-9"><span class="sr-only">Remove</span></th>
         </tr>
       </thead>
       <tbody>
         {#each app.items as item (item.id)}
-          <FileRow {item} onremove={() => app.remove(item)} />
+          <FileRow
+            {item}
+            role={app.roleFor(item)}
+            html={app.html(item)}
+            path={app.settings.path}
+            onpath={(path) => app.setPath(path)}
+            onrole={(role) => app.setRole(item, role)}
+            onremove={() => app.remove(item)}
+          />
         {/each}
       </tbody>
     </table>

@@ -243,3 +243,24 @@ it('is deterministic', async () => {
     b.map((o) => Buffer.from(o.bytes).toString('base64')),
   )
 })
+
+describe('classify', () => {
+  it('tells flat graphics from photos', () => {
+    expect(probe(vips, patches(600, 200).writeToBuffer('.png')).kind).toBe('graphic')
+
+    const w = 300
+    const h = 200
+    const noise = new Uint8Array(w * h * 3)
+    let seed = 7
+    for (let i = 0; i < noise.length; i++)
+      noise[i] = (seed = (seed * 1103515245 + 12345) >>> 0) >>> 24
+    const photoLike = vips.Image.newFromMemory(noise, w, h, 3, vips.BandFormat.uchar).copy({
+      interpretation: 'srgb',
+    })
+    expect(probe(vips, photoLike.writeToBuffer('.png')).kind).toBe('photo')
+  })
+
+  it('treats JPEG as a photo without decoding', () => {
+    expect(probe(vips, patches().writeToBuffer('.jpg', { Q: 90 })).kind).toBe('photo')
+  })
+})
