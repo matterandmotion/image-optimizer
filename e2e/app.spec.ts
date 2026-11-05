@@ -73,6 +73,20 @@ test('makes a responsive set, a ZIP and a CMS master', async ({ page, context })
     '<img src="/images/hero-shot-1000w.jpg"',
   )
 
+  // JSX markup: React prop names; the choice is remembered
+  await page.getByLabel('Markup').selectOption('JSX')
+  await expect(page.locator('pre')).toContainText(
+    '<source type="image/avif" srcSet="/images/hero-shot-400w.avif 400w',
+  )
+  await expect(page.locator('pre')).toContainText('width={1000} height={600}')
+  await page.getByRole('button', { name: 'Copy JSX' }).click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(
+    /^\{\/\* Hero Shot\.jpg \*\/\}\n<picture>/,
+  )
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem('image-optimizer:settings')!).markup),
+  ).toBe('jsx')
+
   // before/after: both sides are the output's size; Esc closes
   await page.getByRole('button', { name: 'Compare hero-shot-1000w.avif' }).click()
   const dialog = page.getByRole('dialog')

@@ -31,17 +31,41 @@ export function normalisePath(path: string): string {
 
 const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
+/** HTML also covers Astro, Svelte and Vue templates; JSX is for React and Preact. */
+export type Markup = 'html' | 'jsx'
+
+const JSX_NAMES: Record<string, string> = { srcset: 'srcSet', fetchpriority: 'fetchPriority' }
+
+function tag(markup: Markup, name: string, attrs: [string, string | number][]): string {
+  const parts = attrs.map(([key, value]) => {
+    if (markup === 'html') return `${key}="${escape(String(value))}"`
+    const prop = JSX_NAMES[key] ?? key
+    return typeof value === 'number' ? `${prop}={${value}}` : `${prop}="${escape(value)}"`
+  })
+  return `<${name} ${parts.join(' ')}${markup === 'jsx' ? ' />' : '>'}`
+}
+
+/** A comment in the given markup, e.g. to label each image in a combined snippet. */
+export function comment(markup: Markup, text: string): string {
+  return markup === 'jsx'
+    ? `{/* ${text.replace(/\*\//g, '* /')} */}`
+    : `<!-- ${text.replace(/--/g, '- -')} -->`
+}
+
 /**
  * `<picture>` markup for one image's responsive set. Formats appear in the order given
  * (preferred first); the last one becomes the `<img>` fallback.
  * Hero images load eagerly with high fetch priority; everything else is lazy, with
  * `sizes="auto, …"` so supporting browsers pick the width from the layout.
  */
-export function pictureHtml(
+export function pictureMarkup(
   role: Role,
   outputs: SnippetOutput[],
-  path = '/images/',
-  alt = '',
+  {
+    path = '/images/',
+    alt = '',
+    markup = 'html',
+  }: { path?: string; alt?: string; markup?: Markup } = {},
 ): string {
   const base = normalisePath(path)
   const byFormat = new Map<Format, SnippetOutput[]>()
@@ -56,15 +80,37 @@ export function pictureHtml(
   const largest = byFormat.get(fallback)!.reduce((a, b) => (b.width > a.width ? b : a))
   const eager = role === 'hero'
   const sizes = eager ? SIZES[role] : `auto, ${SIZES[role]}`
-  const loading = eager
-    ? 'fetchpriority="high" decoding="async"'
-    : 'loading="lazy" decoding="async"'
+  const loading: [string, string][] = eager
+    ? [
+        ['fetchpriority', 'high'],
+        ['decoding', 'async'],
+      ]
+    : [
+        ['loading', 'lazy'],
+        ['decoding', 'async'],
+      ]
 
   const lines = ['<picture>']
   for (const f of formats.slice(0, -1))
-    lines.push(`  <source type="${MIME[f]}" srcset="${srcset(f)}" sizes="${sizes}">`)
+    lines.push(
+      '  ' +
+        tag(markup, 'source', [
+          ['type', MIME[f]],
+          ['srcset', srcset(f)],
+          ['sizes', sizes],
+        ]),
+    )
   lines.push(
-    `  <img src="${base}${largest.name}" srcset="${srcset(fallback)}" sizes="${sizes}" width="${largest.width}" height="${largest.height}" alt="${escape(alt)}" ${loading}>`,
+    '  ' +
+      tag(markup, 'img', [
+        ['src', `${base}${largest.name}`],
+        ['srcset', srcset(fallback)],
+        ['sizes', sizes],
+        ['width', largest.width],
+        ['height', largest.height],
+        ['alt', alt],
+        ...loading,
+      ]),
   )
   lines.push('</picture>')
   return lines.join('\n')

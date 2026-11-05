@@ -1,5 +1,5 @@
 import type { Mode, Role } from './plan'
-import { pictureHtml, SIZES, type SnippetOutput } from './snippet'
+import { pictureMarkup, SIZES, type SnippetOutput } from './snippet'
 
 export interface ManifestImage {
   base: string
@@ -24,7 +24,7 @@ export function manifest(mode: Mode, path: string, images: ManifestImage[]): str
         source: img.source,
         ...(mode === 'responsive' && {
           sizes: SIZES[img.role],
-          html: pictureHtml(img.role, img.outputs, path),
+          html: pictureMarkup(img.role, img.outputs, { path }),
         }),
         outputs: img.outputs.map(({ name, format, width, height, bytes }) => ({
           file: name,
