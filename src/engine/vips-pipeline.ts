@@ -228,3 +228,25 @@ export async function processImage(
   }
   return out
 }
+
+/**
+ * A lossless PNG from 8-bit RGBA pixels (e.g. from a canvas). The alpha band is dropped when
+ * every pixel is opaque, so photos aren't treated as transparent images.
+ */
+export function rgbaToPng(vips: VipsModule, rgba: Uint8Array, width: number, height: number) {
+  let opaque = true
+  for (let i = 3; i < rgba.length; i += 4)
+    if (rgba[i] !== 255) {
+      opaque = false
+      break
+    }
+  let im = vips.Image.newFromMemory(rgba, width, height, 4, vips.BandFormat.uchar)
+  im = step(im, im.copy({ interpretation: 'srgb' }))
+  if (opaque) im = step(im, im.extractBand(0, { n: 3 }))
+  try {
+    // Fast compression: this is an intermediate file, never an output.
+    return im.writeToBuffer('.png', { compression: 1 }) as Uint8Array
+  } finally {
+    im.delete()
+  }
+}
