@@ -2,6 +2,7 @@
   import { formatBytes, formatList } from './lib/format'
   import { ROLE_WIDTHS, type PlanSettings, type Role } from './lib/plan'
   import { App } from './ui/app.svelte'
+  import Compare from './ui/Compare.svelte'
   import FileRow from './ui/FileRow.svelte'
   import { filesFromDataTransfer, save } from './ui/files'
   import { copy, MASTER_WIDTHS, MODES, QUALITIES, ROLES } from './ui/options'
@@ -188,6 +189,7 @@
             path={app.settings.path}
             onpath={(path) => app.setPath(path)}
             onrole={(role) => app.setRole(item, role)}
+            oncompare={(output) => app.compare(item, output)}
             onremove={() => app.remove(item)}
           />
         {/each}
@@ -224,6 +226,15 @@
     Files are processed on this device and never uploaded.
   </footer>
 </div>
+
+{#if app.comparing}
+  <Compare
+    item={app.comparing.item}
+    output={app.comparing.output}
+    original={app.comparing.original}
+    onclose={() => (app.comparing = null)}
+  />
+{/if}
 
 {#if dragging && app.items.length}
   <div

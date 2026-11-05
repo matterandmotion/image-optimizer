@@ -73,6 +73,25 @@ test('makes a responsive set, a ZIP and a CMS master', async ({ page, context })
     '<img src="/images/hero-shot-1000w.jpg"',
   )
 
+  // before/after: both sides are the output's size; Esc closes
+  await page.getByRole('button', { name: 'Compare hero-shot-1000w.avif' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.locator('img')).toHaveCount(2, { timeout: 30_000 })
+  await expect
+    .poll(() =>
+      dialog
+        .locator('img')
+        .evaluateAll((imgs) => imgs.map((i) => (i as HTMLImageElement).naturalWidth)),
+    )
+    .toEqual([1000, 1000])
+  const divider = dialog.getByLabel('Divider position')
+  await divider.focus()
+  await page.keyboard.press('Home')
+  await expect(divider).toHaveValue('0')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'Download ZIP' }).click(),
