@@ -1,7 +1,15 @@
 import { CancelledError, Engine } from '../engine/client'
 import type { Format, SourceInfo } from '../engine/types'
+import { manifest } from '../lib/manifest'
 import { outputName, slugify, uniqueBase } from '../lib/naming'
-import { DEFAULT_SETTINGS, planVariants, type PlanSettings } from '../lib/plan'
+import {
+  DEFAULT_SETTINGS,
+  planVariants,
+  type Mode,
+  type PlanSettings,
+  type Role,
+} from '../lib/plan'
+import { pictureHtml } from '../lib/snippet'
 import { isImage } from './files'
 
 export type Status = 'reading' | 'queued' | 'processing' | 'done' | 'error'
@@ -23,6 +31,12 @@ const MIME: Record<Format, string> = {
 }
 const SETTINGS_KEY = 'image-optimizer:settings'
 
+export interface Settings extends PlanSettings {
+  /** URL path the images will be served from, used in the HTML snippets. */
+  path: string
+}
+const DEFAULTS: Settings = { ...DEFAULT_SETTINGS, path: '/images/' }
+
 /** Engine output buffers are transferred copies, never shared memory. */
 const blobOf = (bytes: Uint8Array, format: Format) =>
   new Blob([bytes as Uint8Array<ArrayBuffer>], { type: MIME[format] })
@@ -35,6 +49,10 @@ export class Item {
   progress = $state.raw({ done: 0, total: 0 })
   outputs = $state.raw<Output[]>([])
   error = $state<string | null>(null)
+  /** Role picked for this image. `null` follows the toolbar (graphics default to Graphic). */
+  roleOverride = $state<Role | null>(null)
+  /** Mode and role the current outputs were made with. */
+  madeWith = $state.raw<{ mode: Mode; role: Role } | null>(null)
 
   constructor(
     readonly file: File,
@@ -50,6 +68,7 @@ export class Item {
   releaseOutputs() {
     for (const o of this.outputs) URL.revokeObjectURL(o.url)
     this.outputs = []
+    this.madeWith = null
   }
 
   release() {
@@ -58,17 +77,17 @@ export class Item {
   }
 }
 
-function loadSettings(): PlanSettings {
+function loadSettings(): Settings {
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') }
+    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') }
   } catch {
-    return { ...DEFAULT_SETTINGS }
+    return { ...DEFAULTS }
   }
 }
 
 export class App {
   items = $state<Item[]>([])
-  settings = $state<PlanSettings>(loadSettings())
+  settings = $state<Settings>(loadSettings())
 
   /** Heavy processing, one image at a time. */
   private engine = new Engine()
@@ -105,21 +124,47 @@ export class App {
     }
   }
 
-  /** Changing settings re-processes everything with the new plan. */
+  roleFor(item: Item): Role {
+    return item.roleOverride ?? (item.info?.kind === 'graphic' ? 'graphic' : this.settings.role)
+  }
+
+  /** Changing plan settings re-processes everything. */
   set(patch: Partial<PlanSettings>) {
     Object.assign(this.settings, patch)
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify($state.snapshot(this.settings)))
-    } catch {
-      // storage unavailable (private mode); settings just won't persist
-    }
-    for (const item of this.items)
-      if (item.status === 'done' || item.status === 'processing') {
-        item.releaseOutputs()
-        item.status = 'queued'
-      }
+    this.save()
+    for (const item of this.items) this.requeue(item)
     this.engine.cancel()
     void this.pump()
+  }
+
+  /** Only affects the HTML snippets; nothing is re-processed. */
+  setPath(path: string) {
+    this.settings.path = path
+    this.save()
+  }
+
+  setRole(item: Item, role: Role) {
+    item.roleOverride = role
+    const processing = item.status === 'processing'
+    this.requeue(item)
+    if (processing) this.engine.cancel()
+    void this.pump()
+  }
+
+  /** `<picture>` markup for a finished responsive set; null for CMS masters. */
+  html(item: Item): string | null {
+    if (item.status !== 'done' || item.madeWith?.mode !== 'responsive') return null
+    return pictureHtml(item.madeWith.role, item.outputs, this.settings.path)
+  }
+
+  allHtml(): string {
+    return this.done
+      .map((item) => {
+        const html = this.html(item)
+        return html && `<!-- ${item.file.name} -->\n${html}`
+      })
+      .filter(Boolean)
+      .join('\n\n')
   }
 
   remove(item: Item) {
@@ -138,12 +183,42 @@ export class App {
     this.bases.clear()
   }
 
+  /** Every output, plus manifest.json (sizes, dimensions and, for responsive sets, markup). */
   async zip(): Promise<Blob> {
     const { downloadZip } = await import('client-zip')
-    const files = this.done.flatMap((item) =>
-      item.outputs.map((o) => ({ name: o.name, input: o.blob })),
+    const done = this.done
+    const files = done.flatMap((item) => item.outputs.map((o) => ({ name: o.name, input: o.blob })))
+    const json = manifest(
+      this.settings.mode,
+      this.settings.path,
+      done.map((item) => ({
+        base: item.base,
+        role: item.madeWith?.role ?? this.roleFor(item),
+        source: {
+          file: item.file.name,
+          width: item.info?.width ?? 0,
+          height: item.info?.height ?? 0,
+          bytes: item.file.size,
+        },
+        outputs: item.outputs.map((o) => ({ ...o, bytes: o.blob.size })),
+      })),
     )
+    files.push({ name: 'manifest.json', input: new Blob([json], { type: 'application/json' }) })
     return downloadZip(files).blob()
+  }
+
+  private requeue(item: Item) {
+    if (item.status !== 'done' && item.status !== 'processing') return
+    item.releaseOutputs()
+    item.status = 'queued'
+  }
+
+  private save() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify($state.snapshot(this.settings)))
+    } catch {
+      // storage unavailable (private mode); settings just won't persist
+    }
   }
 
   private async read(item: Item) {
@@ -173,12 +248,13 @@ export class App {
       for (let item = this.next(); item; item = this.next()) {
         const target = item
         const settings = $state.snapshot(this.settings)
+        const role = this.roleFor(target)
         target.status = 'processing'
         target.progress = { done: 0, total: 0 }
         try {
           const encoded = await this.engine.process(
             target.file,
-            planVariants(target.info!, settings),
+            planVariants(target.info!, { ...settings, role }),
             (done, total) => (target.progress = { done, total }),
           )
           target.outputs = encoded.map((e) => {
@@ -193,6 +269,7 @@ export class App {
               url: URL.createObjectURL(blob),
             }
           })
+          target.madeWith = { mode: settings.mode, role }
           target.status = 'done'
         } catch (e) {
           // Cancelled by a settings change or removal: the item is already re-queued or gone.

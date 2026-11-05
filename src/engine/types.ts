@@ -25,6 +25,8 @@ export interface SourceInfo {
   hasProfile: boolean
   /** EXIF orientation, 1–8. */
   orientation: number
+  /** Flat-colour graphics (logos, illustrations, screenshots) suit lossless formats. */
+  kind: 'photo' | 'graphic'
 }
 
 export interface EncodedVariant {
