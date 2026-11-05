@@ -260,7 +260,39 @@ describe('classify', () => {
     expect(probe(vips, photoLike.writeToBuffer('.png')).kind).toBe('photo')
   })
 
-  it('treats JPEG as a photo without decoding', () => {
+  it('treats JPEG as a photo', () => {
     expect(probe(vips, patches().writeToBuffer('.jpg', { Q: 90 })).kind).toBe('photo')
+  })
+})
+
+describe('average colour', () => {
+  // The mean of the six patches, rounded.
+  const mean = [0, 1, 2].map((c) =>
+    Math.round(PATCHES.reduce((sum, p) => sum + p[c], 0) / PATCHES.length),
+  )
+
+  it('averages in sRGB, for PNG and (shrunk on load) JPEG', () => {
+    for (const buf of [
+      patches(600, 200).writeToBuffer('.png'),
+      patches(1920, 640).writeToBuffer('.jpg', { Q: 95 }),
+    ]) {
+      const colour = probe(vips, buf).colour!
+      const rgb = [1, 3, 5].map((i) => parseInt(colour.slice(i, i + 2), 16))
+      rgb.forEach((v, i) => expect(Math.abs(v - mean[i])).toBeLessThanOrEqual(2))
+    }
+  })
+
+  it('converts the colour profile first', () => {
+    // sRGB red stored with a Display P3 profile: the raw numbers are about (234, 51, 35)
+    const red = vips.Image.black(64, 64)
+      .add([255, 0, 0])
+      .cast('uchar')
+      .copy({ interpretation: 'srgb' })
+    const p3 = red.iccTransform('p3', { input_profile: 'srgb' })
+    expect(probe(vips, p3.writeToBuffer('.png')).colour).toBe('#ff0000')
+  })
+
+  it('is null for images with transparency', () => {
+    expect(probe(vips, patches().bandjoin(128).writeToBuffer('.png')).colour).toBeNull()
   })
 })

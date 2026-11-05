@@ -24,7 +24,7 @@ const JPEG = {
 /** Reads the header, then classifies the content (decoding a small sample, except for JPEG). */
 export function probe(vips: VipsModule, buf: Uint8Array): SourceInfo {
   const im = vips.Image.newFromBuffer(buf, '', { access: 'sequential' })
-  let header: Omit<SourceInfo, 'kind'>
+  let header: Omit<SourceInfo, 'kind' | 'colour'>
   try {
     const orientation = im.getTypeof('orientation') ? im.getInt('orientation') : 1
     const swap = SWAPS_AXES.has(orientation)
@@ -40,39 +40,76 @@ export function probe(vips: VipsModule, buf: Uint8Array): SourceInfo {
   } finally {
     im.delete()
   }
-  return { ...header, kind: header.loader.startsWith('jpegload') ? 'photo' : classify(vips, buf) }
+  const jpeg = header.loader.startsWith('jpegload')
+  const px = sample(vips, buf, jpeg)
+  return {
+    ...header,
+    kind: jpeg ? 'photo' : classify(px),
+    colour: header.hasAlpha ? null : averageColour(px),
+  }
+}
+
+/** Pixels in 8-bit sRGB, 3 bands plus alpha if there is one. */
+export interface Sample {
+  px: Uint8Array
+  width: number
+  height: number
+  bands: number
 }
 
 /**
- * Photo or flat-colour graphic, from a nearest-neighbour sample (no blending, so flat areas
- * stay flat). Photos measured 40–72% unique colours and <10% identical neighbours; graphics
- * and UI screenshots measured <2% and >90%.
+ * A nearest-neighbour sample at most 256 px wide (no blending, so flat areas stay flat),
+ * converted to sRGB. JPEGs shrink while decoding, so this stays cheap for large photos.
  */
-export function classify(vips: VipsModule, buf: Uint8Array): 'photo' | 'graphic' {
-  let im = vips.Image.newFromBuffer(buf, '', { access: 'sequential' })
+function sample(vips: VipsModule, buf: Uint8Array, jpeg: boolean): Sample {
+  let im = vips.Image.newFromBuffer(buf, jpeg ? '[shrink=8]' : '', { access: 'sequential' })
   if (im.width > 256) im = step(im, im.resize(256 / im.width, { kernel: 'nearest' }))
-  if (im.format !== 'uchar') im = step(im, im.colourspace('srgb'))
-  if (im.format !== 'uchar') im = step(im, im.cast('uchar'))
+  im = toSrgb(im)
   try {
-    const px = im.writeToMemory() as Uint8Array
-    const { width, height, bands } = im
-    const colour = (i: number) =>
-      bands >= 3 ? (px[i] << 16) | (px[i + 1] << 8) | px[i + 2] : px[i]
-    const colours = new Set<number>()
-    let same = 0
-    for (let y = 0; y < height; y++)
-      for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * bands
-        const c = colour(i)
-        colours.add(c)
-        if (x > 0 && c === colour(i - bands)) same++
-      }
-    const flat = same / Math.max(1, (width - 1) * height)
-    const unique = colours.size / (width * height)
-    return flat > 0.5 || unique < 0.05 ? 'graphic' : 'photo'
+    return {
+      px: im.writeToMemory() as Uint8Array,
+      width: im.width,
+      height: im.height,
+      bands: im.bands,
+    }
   } finally {
     im.delete()
   }
+}
+
+/**
+ * Photo or flat-colour graphic. Photos measured 40–72% unique colours and <10% identical
+ * neighbours; graphics and UI screenshots measured <2% and >90%.
+ */
+export function classify({ px, width, height, bands }: Sample): 'photo' | 'graphic' {
+  const colour = (i: number) => (px[i] << 16) | (px[i + 1] << 8) | px[i + 2]
+  const colours = new Set<number>()
+  let same = 0
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * bands
+      const c = colour(i)
+      colours.add(c)
+      if (x > 0 && c === colour(i - bands)) same++
+    }
+  const flat = same / Math.max(1, (width - 1) * height)
+  const unique = colours.size / (width * height)
+  return flat > 0.5 || unique < 0.05 ? 'graphic' : 'photo'
+}
+
+/** Mean sRGB colour as `#rrggbb`. */
+export function averageColour({ px, width, height, bands }: Sample): string {
+  const sum = [0, 0, 0]
+  for (let i = 0; i < width * height * bands; i += bands)
+    for (let c = 0; c < 3; c++) sum[c] += px[i + c]
+  const n = Math.max(1, width * height)
+  return `#${sum
+    .map((s) =>
+      Math.round(s / n)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`
 }
 
 /**

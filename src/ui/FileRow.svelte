@@ -13,6 +13,7 @@
     snippet,
     path,
     markup,
+    placeholder,
     onsnippet,
     onrole,
     oncompare,
@@ -23,7 +24,8 @@
     snippet: string | null
     path: string
     markup: Markup
-    onsnippet: (patch: { path?: string; markup?: Markup }) => void
+    placeholder: boolean
+    onsnippet: (patch: { path?: string; markup?: Markup; placeholder?: boolean }) => void
     onrole: (role: Role) => void
     oncompare: (output: Output) => void
     onremove: () => void
@@ -168,7 +170,9 @@
       </ul>
       {#if snippet}
         <div class="mt-3 rounded-md bg-neutral-50 dark:bg-neutral-900">
-          <div class="flex items-center gap-3 px-3 pt-2 text-xs text-neutral-500">
+          <div
+            class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 pt-2 text-xs text-neutral-500"
+          >
             <InlineSelect
               label="Markup"
               title="HTML also works in Astro, Svelte and Vue templates. JSX is for React."
@@ -189,6 +193,24 @@
                 oninput={(e) => onsnippet({ path: e.currentTarget.value })}
               />
             </label>
+            {#if item.info?.colour}
+              <label
+                class="flex items-center gap-1.5"
+                title="Shows the image’s average colour until it has loaded, as an inline style"
+              >
+                <input
+                  type="checkbox"
+                  class="accent-blue-600"
+                  checked={placeholder}
+                  onchange={(e) => onsnippet({ placeholder: e.currentTarget.checked })}
+                />
+                <span>Placeholder</span>
+                <span
+                  class="size-3 rounded-sm ring-1 ring-black/10 ring-inset dark:ring-white/15"
+                  style:background-color={item.info.colour}
+                ></span>
+              </label>
+            {/if}
             <button
               type="button"
               class="ml-auto font-medium hover:text-neutral-900 dark:hover:text-neutral-100"

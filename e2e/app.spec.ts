@@ -87,6 +87,10 @@ test('makes a responsive set, a ZIP and a CMS master', async ({ page, context })
     await page.evaluate(() => JSON.parse(localStorage.getItem('image-optimizer:settings')!).markup),
   ).toBe('jsx')
 
+  // average-colour placeholder, as an inline style
+  await page.getByLabel('Placeholder').check()
+  await expect(page.locator('pre')).toContainText(/style=\{\{ backgroundColor: '#[0-9a-f]{6}' \}\}/)
+
   // before/after: both sides are the output's size; Esc closes
   await page.getByRole('button', { name: 'Compare hero-shot-1000w.avif' }).click()
   const dialog = page.getByRole('dialog')
