@@ -125,3 +125,76 @@ test('detects a flat graphic and gives it lossless WebP + PNG', async ({ page })
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   await expect(page.getByText('logo-1600w.avif', { exact: true })).toBeVisible()
 })
+
+test('saves into a folder, leaving a foreign manifest.json alone', async ({ page }) => {
+  // The native folder picker can't be driven by tests; stand in a folder of the
+  // origin-private file system, which supports the same handle API.
+  await page.addInitScript(() => {
+    Object.assign(window, {
+      showDirectoryPicker: async () =>
+        (await navigator.storage.getDirectory()).getDirectoryHandle('site', { create: true }),
+    })
+  })
+  await page.goto('/')
+  const folder = () =>
+    page.evaluate(async () => {
+      const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('site')
+      const files: Record<string, string> = {}
+      for await (const [name, handle] of dir.entries()) {
+        const file = await (handle as FileSystemFileHandle).getFile()
+        files[name] = name.endsWith('.json') ? await file.text() : `${file.size} bytes`
+      }
+      return files
+    })
+  // the site already has a web app manifest, and an old copy of one output
+  await page.evaluate(async () => {
+    const dir = await (
+      await navigator.storage.getDirectory()
+    ).getDirectoryHandle('site', {
+      create: true,
+    })
+    for (const [name, text] of [
+      ['manifest.json', '{"name":"My site"}'],
+      ['photo-400w.avif', 'old'],
+    ]) {
+      const writable = await (await dir.getFileHandle(name, { create: true })).createWritable()
+      await writable.write(text)
+      await writable.close()
+    }
+  })
+
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'photo.jpg',
+    mimeType: 'image/jpeg',
+    buffer: await makeJpeg(page, 1000, 600),
+  })
+  await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
+  await page.getByRole('button', { name: 'Save to folder' }).click()
+  await expect(page.getByRole('status')).toHaveText(
+    'Saved 6 files to “site”, replacing 1. The folder’s own manifest.json wasn’t replaced.',
+  )
+  let files = await folder()
+  expect(Object.keys(files).sort()).toEqual([
+    'manifest.json',
+    'photo-1000w.avif',
+    'photo-1000w.jpg',
+    'photo-400w.avif',
+    'photo-400w.jpg',
+    'photo-800w.avif',
+    'photo-800w.jpg',
+  ])
+  expect(files['manifest.json']).toBe('{"name":"My site"}')
+  expect(files['photo-400w.avif']).not.toBe('3 bytes')
+
+  // without the foreign manifest, ours is written, and replaced on the next save
+  await page.evaluate(async () => {
+    const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('site')
+    await dir.removeEntry('manifest.json')
+  })
+  await page.getByRole('button', { name: 'Save to folder' }).click()
+  await expect(page.getByRole('status')).toHaveText('Saved 7 files to “site”, replacing 6.')
+  files = await folder()
+  expect(JSON.parse(files['manifest.json']).generator).toBe('image-optimizer')
+  await page.getByRole('button', { name: 'Save to folder' }).click()
+  await expect(page.getByRole('status')).toHaveText('Saved 7 files to “site”, replacing 7.')
+})

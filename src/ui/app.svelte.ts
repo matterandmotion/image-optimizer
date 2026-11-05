@@ -1,6 +1,6 @@
 import { CancelledError, Engine } from '../engine/client'
 import type { Format, SourceInfo } from '../engine/types'
-import { manifest } from '../lib/manifest'
+import { GENERATOR, MANIFEST, manifest } from '../lib/manifest'
 import { outputName, slugify, uniqueBase } from '../lib/naming'
 import {
   DEFAULT_SETTINGS,
@@ -10,7 +10,7 @@ import {
   type Role,
 } from '../lib/plan'
 import { pictureHtml } from '../lib/snippet'
-import { isImage } from './files'
+import { isImage, saveToFolder, type ExportFile, type FolderResult } from './files'
 
 export type Status = 'reading' | 'queued' | 'processing' | 'done' | 'error'
 
@@ -216,10 +216,9 @@ export class App {
   }
 
   /** Every output, plus manifest.json (sizes, dimensions and, for responsive sets, markup). */
-  async zip(): Promise<Blob> {
-    const { downloadZip } = await import('client-zip')
+  exportFiles(): ExportFile[] {
     const done = this.done
-    const files = done.flatMap((item) => item.outputs.map((o) => ({ name: o.name, input: o.blob })))
+    const files = done.flatMap((item) => item.outputs.map((o) => ({ name: o.name, blob: o.blob })))
     const json = manifest(
       this.settings.mode,
       this.settings.path,
@@ -235,8 +234,26 @@ export class App {
         outputs: item.outputs.map((o) => ({ ...o, bytes: o.blob.size })),
       })),
     )
-    files.push({ name: 'manifest.json', input: new Blob([json], { type: 'application/json' }) })
-    return downloadZip(files).blob()
+    files.push({ name: MANIFEST, blob: new Blob([json], { type: 'application/json' }) })
+    return files
+  }
+
+  async zip(): Promise<Blob> {
+    const { downloadZip } = await import('client-zip')
+    return downloadZip(this.exportFiles().map((f) => ({ name: f.name, input: f.blob }))).blob()
+  }
+
+  /** Writes everything into a folder. Resolves to null if the picker was cancelled. */
+  saveToFolder(): Promise<FolderResult | null> {
+    // A folder like a site's public/ may hold a web app manifest.json; only replace our own.
+    return saveToFolder(this.exportFiles(), async (existing) => {
+      if (existing.name !== MANIFEST) return false
+      try {
+        return JSON.parse(await existing.text()).generator !== GENERATOR
+      } catch {
+        return true
+      }
+    })
   }
 
   private requeue(item: Item) {

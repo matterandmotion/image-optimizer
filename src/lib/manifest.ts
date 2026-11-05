@@ -8,11 +8,15 @@ export interface ManifestImage {
   outputs: (SnippetOutput & { bytes: number })[]
 }
 
+export const MANIFEST = 'manifest.json'
+/** Identifies a manifest.json written by this tool. */
+export const GENERATOR = 'image-optimizer'
+
 /** `manifest.json` for the ZIP: every output with its size, plus the markup for responsive sets. */
 export function manifest(mode: Mode, path: string, images: ManifestImage[]): string {
   return JSON.stringify(
     {
-      generator: 'image-optimizer',
+      generator: GENERATOR,
       mode,
       images: images.map((img) => ({
         name: img.base,

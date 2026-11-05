@@ -4,7 +4,7 @@
   import { App } from './ui/app.svelte'
   import Compare from './ui/Compare.svelte'
   import FileRow from './ui/FileRow.svelte'
-  import { filesFromDataTransfer, save } from './ui/files'
+  import { canSaveToFolder, filesFromDataTransfer, save, type FolderResult } from './ui/files'
   import { copy, MASTER_WIDTHS, MODES, QUALITIES, ROLES } from './ui/options'
   import Segmented from './ui/Segmented.svelte'
   import Select from './ui/Select.svelte'
@@ -15,6 +15,9 @@
   let dragging = $state(false)
   let zipping = $state(false)
   let copied = $state(false)
+  let saving = $state(false)
+  let note = $state<{ text: string; error: boolean } | null>(null)
+  let noteTimer: ReturnType<typeof setTimeout> | undefined
 
   const summary = $derived(describe(app.settings))
   const totals = $derived(app.totals)
@@ -47,6 +50,33 @@
     } finally {
       zipping = false
     }
+  }
+
+  // Called straight from the click, so the folder picker still has the user's gesture.
+  async function saveFolder() {
+    saving = true
+    try {
+      const result = await app.saveToFolder()
+      if (result) show(describeSave(result), false)
+    } catch (e) {
+      show(`Couldn’t save: ${e instanceof Error ? e.message : String(e)}`, true)
+    } finally {
+      saving = false
+    }
+  }
+
+  function describeSave({ folder, written, replaced, kept }: FolderResult): string {
+    let text = `Saved ${written} ${written === 1 ? 'file' : 'files'} to “${folder}”`
+    text += replaced ? `, replacing ${replaced}.` : '.'
+    if (kept.length)
+      text += ` The folder’s own ${formatList(kept)} ${kept.length === 1 ? 'wasn’t' : 'weren’t'} replaced.`
+    return text
+  }
+
+  function show(text: string, error: boolean) {
+    note = { text, error }
+    clearTimeout(noteTimer)
+    noteTimer = setTimeout(() => (note = null), 8000)
   }
 
   function ondragover(e: DragEvent) {
@@ -89,7 +119,7 @@
   }}
 />
 
-<div class="mx-auto flex min-h-dvh max-w-5xl flex-col px-4 py-6 sm:px-6">
+<div class="mx-auto flex min-h-dvh max-w-6xl flex-col px-4 py-6 sm:px-6">
   <header class="flex items-baseline justify-between gap-4">
     <h1 class="text-base font-semibold">Image Optimizer</h1>
     {#if done}
@@ -144,23 +174,43 @@
           onchange={(masterWidth) => app.set({ masterWidth })}
         />
       {/if}
-      <span class="flex-1"></span>
-      <button type="button" class={secondary} onclick={() => input.click()}>Add images</button>
-      {#if app.settings.mode === 'responsive'}
-        <button type="button" class={secondary} disabled={!done || pending > 0} onclick={copyAll}>
-          {copied ? 'Copied' : 'Copy HTML'}
+      <!-- The actions wrap as one group, after the settings. -->
+      <div class="flex flex-wrap gap-2 sm:ml-auto">
+        <button type="button" class={secondary} onclick={() => input.click()}>Add images</button>
+        {#if app.settings.mode === 'responsive'}
+          <button type="button" class={secondary} disabled={!done || pending > 0} onclick={copyAll}>
+            {copied ? 'Copied' : 'Copy HTML'}
+          </button>
+        {/if}
+        {#if canSaveToFolder}
+          <button
+            type="button"
+            class={secondary}
+            disabled={!done || pending > 0 || saving}
+            onclick={saveFolder}
+          >
+            {saving ? 'Saving…' : 'Save to folder'}
+          </button>
+        {/if}
+        <button
+          type="button"
+          class={primary}
+          disabled={!done || pending > 0 || zipping}
+          onclick={downloadZip}
+        >
+          {zipping ? 'Preparing…' : 'Download ZIP'}
         </button>
-      {/if}
-      <button
-        type="button"
-        class={primary}
-        disabled={!done || pending > 0 || zipping}
-        onclick={downloadZip}
-      >
-        {zipping ? 'Preparing…' : 'Download ZIP'}
-      </button>
+      </div>
     </div>
 
+    <p
+      role="status"
+      class={note
+        ? ['mt-3 text-sm', note.error ? 'text-red-600 dark:text-red-400' : 'font-medium']
+        : 'sr-only'}
+    >
+      {#if note}{note.text}{/if}
+    </p>
     <p class="mt-3 text-sm text-neutral-500">{summary}</p>
 
     <!-- Fixed column widths (set on the header cells), so nothing shifts while files process. -->
