@@ -53,6 +53,8 @@ export class Item {
   roleOverride = $state<Role | null>(null)
   /** Mode and role the current outputs were made with. */
   madeWith = $state.raw<{ mode: Mode; role: Role } | null>(null)
+  /** The original rendered losslessly at a given width, for comparisons. */
+  readonly originals = new Map<number, Promise<string>>()
 
   constructor(
     readonly file: File,
@@ -74,6 +76,8 @@ export class Item {
   release() {
     this.releaseOutputs()
     if (this.thumb) URL.revokeObjectURL(this.thumb)
+    for (const url of this.originals.values()) void url.then(URL.revokeObjectURL, () => {})
+    this.originals.clear()
   }
 }
 
@@ -85,9 +89,16 @@ function loadSettings(): Settings {
   }
 }
 
+export interface Comparison {
+  item: Item
+  output: Output
+  original: string | null
+}
+
 export class App {
   items = $state<Item[]>([])
   settings = $state<Settings>(loadSettings())
+  comparing = $state.raw<Comparison | null>(null)
 
   /** Heavy processing, one image at a time. */
   private engine = new Engine()
@@ -151,6 +162,25 @@ export class App {
     void this.pump()
   }
 
+  /** Opens the before/after view. The original is rendered at the output's width, losslessly. */
+  async compare(item: Item, output: Output) {
+    this.comparing = { item, output, original: null }
+    let original = item.originals.get(output.width)
+    if (!original) {
+      original = this.reader
+        .process(item.file, [{ width: output.width, format: 'png', quality: 100 }])
+        .then(([o]) => URL.createObjectURL(blobOf(o.bytes, 'png')))
+      item.originals.set(output.width, original)
+      original.catch(() => item.originals.delete(output.width))
+    }
+    try {
+      const url = await original
+      if (this.comparing?.output === output) this.comparing = { item, output, original: url }
+    } catch {
+      if (this.comparing?.output === output) this.comparing = null
+    }
+  }
+
   /** `<picture>` markup for a finished responsive set; null for CMS masters. */
   html(item: Item): string | null {
     if (item.status !== 'done' || item.madeWith?.mode !== 'responsive') return null
@@ -168,6 +198,7 @@ export class App {
   }
 
   remove(item: Item) {
+    if (this.comparing?.item === item) this.comparing = null
     if (item.status === 'processing') this.engine.cancel()
     item.release()
     this.bases.delete(item.base)
@@ -176,6 +207,7 @@ export class App {
   }
 
   clear() {
+    this.comparing = null
     this.engine.cancel()
     this.reader.cancel()
     for (const item of this.items) item.release()
@@ -208,6 +240,7 @@ export class App {
   }
 
   private requeue(item: Item) {
+    if (this.comparing?.item === item) this.comparing = null
     if (item.status !== 'done' && item.status !== 'processing') return
     item.releaseOutputs()
     item.status = 'queued'

@@ -2,7 +2,7 @@
   import { MediaQuery } from 'svelte/reactivity'
   import { formatBytes, formatSaved } from '../lib/format'
   import type { Role } from '../lib/plan'
-  import type { Item } from './app.svelte'
+  import type { Item, Output } from './app.svelte'
   import { copy, ROLES } from './options'
 
   let {
@@ -12,6 +12,7 @@
     path,
     onpath,
     onrole,
+    oncompare,
     onremove,
   }: {
     item: Item
@@ -20,6 +21,7 @@
     path: string
     onpath: (path: string) => void
     onrole: (role: Role) => void
+    oncompare: (output: Output) => void
     onremove: () => void
   } = $props()
 
@@ -45,9 +47,15 @@
 <tr class="border-b border-neutral-100 dark:border-neutral-900">
   <td class="py-2 pr-3">
     <div class="flex items-center gap-3">
-      <span class="size-9 shrink-0 overflow-hidden rounded bg-neutral-100 dark:bg-neutral-900">
+      <button
+        type="button"
+        class="size-9 shrink-0 overflow-hidden rounded bg-neutral-100 enabled:cursor-zoom-in disabled:cursor-default dark:bg-neutral-900"
+        aria-label="Compare {item.file.name} with the original"
+        disabled={!primary}
+        onclick={() => primary && oncompare(primary)}
+      >
         {#if item.thumb}<img src={item.thumb} alt="" class="size-full object-cover" />{/if}
-      </span>
+      </button>
       <div class="min-w-0 flex-1">
         <button
           type="button"
@@ -142,7 +150,7 @@
       <ul class="grid gap-1 text-neutral-500">
         {#each item.outputs as output (output.name)}
           <li
-            class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 sm:grid-cols-[minmax(0,1fr)_8rem_5rem_auto]"
+            class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-4 sm:grid-cols-[minmax(0,1fr)_8rem_5rem_auto_auto]"
           >
             <span class="truncate font-medium text-neutral-900 dark:text-neutral-100"
               >{output.name}</span
@@ -151,6 +159,14 @@
               >{output.width} × {output.height}</span
             >
             <span class="text-right tabular-nums">{formatBytes(output.blob.size)}</span>
+            <button
+              type="button"
+              class="text-blue-600 hover:underline dark:text-blue-400"
+              aria-label="Compare {output.name}"
+              onclick={() => oncompare(output)}
+            >
+              Compare
+            </button>
             <a
               class="text-blue-600 hover:underline dark:text-blue-400"
               href={output.url}
