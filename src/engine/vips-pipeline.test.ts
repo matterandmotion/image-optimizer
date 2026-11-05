@@ -244,6 +244,26 @@ it('is deterministic', async () => {
   )
 })
 
+describe('rgbaToPng', () => {
+  const rgba = (alpha: number) => {
+    const px = new Uint8Array(4 * 4 * 4)
+    for (let i = 0; i < px.length; i += 4) px.set([200, 100, 50, 255], i)
+    px[px.length - 1] = alpha
+    return px
+  }
+
+  it('drops the alpha band when every pixel is opaque', () => {
+    const png = vips.Image.newFromBuffer(rgbaToPng(vips, rgba(255), 4, 4))
+    expect([png.width, png.height, png.bands, png.hasAlpha()]).toEqual([4, 4, 3, false])
+    expect([...(png.writeToMemory() as Uint8Array).slice(0, 3)]).toEqual([200, 100, 50])
+  })
+
+  it('keeps it when any pixel is transparent', () => {
+    const png = vips.Image.newFromBuffer(rgbaToPng(vips, rgba(0), 4, 4))
+    expect([png.bands, png.hasAlpha()]).toEqual([4, true])
+  })
+})
+
 describe('classify', () => {
   it('tells flat graphics from photos', () => {
     expect(probe(vips, patches(600, 200).writeToBuffer('.png')).kind).toBe('graphic')
@@ -262,25 +282,5 @@ describe('classify', () => {
 
   it('treats JPEG as a photo without decoding', () => {
     expect(probe(vips, patches().writeToBuffer('.jpg', { Q: 90 })).kind).toBe('photo')
-  })
-})
-
-describe('rgbaToPng', () => {
-  const rgba = (alpha: number) => {
-    const px = new Uint8Array(4 * 4 * 4)
-    for (let i = 0; i < px.length; i += 4) px.set([200, 100, 50, 255], i)
-    px[px.length - 1] = alpha
-    return px
-  }
-
-  it('drops the alpha band when every pixel is opaque', () => {
-    const png = vips.Image.newFromBuffer(rgbaToPng(vips, rgba(255), 4, 4))
-    expect([png.width, png.height, png.bands, png.hasAlpha()]).toEqual([4, 4, 3, false])
-    expect([...(png.writeToMemory() as Uint8Array).slice(0, 3)]).toEqual([200, 100, 50])
-  })
-
-  it('keeps it when any pixel is transparent', () => {
-    const png = vips.Image.newFromBuffer(rgbaToPng(vips, rgba(0), 4, 4))
-    expect([png.bands, png.hasAlpha()]).toEqual([4, true])
   })
 })
