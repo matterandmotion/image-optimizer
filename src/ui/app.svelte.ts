@@ -9,7 +9,7 @@ import {
   type PlanSettings,
   type Role,
 } from '../lib/plan'
-import { pictureHtml } from '../lib/snippet'
+import { comment, pictureMarkup, type Markup } from '../lib/snippet'
 import { isImage } from './files'
 
 export type Status = 'reading' | 'queued' | 'processing' | 'done' | 'error'
@@ -32,10 +32,12 @@ const MIME: Record<Format, string> = {
 const SETTINGS_KEY = 'image-optimizer:settings'
 
 export interface Settings extends PlanSettings {
-  /** URL path the images will be served from, used in the HTML snippets. */
+  /** URL path the images will be served from, used in the snippets. */
   path: string
+  /** Snippet syntax. */
+  markup: Markup
 }
-const DEFAULTS: Settings = { ...DEFAULT_SETTINGS, path: '/images/' }
+const DEFAULTS: Settings = { ...DEFAULT_SETTINGS, path: '/images/', markup: 'html' }
 
 /** Engine output buffers are transferred copies, never shared memory. */
 const blobOf = (bytes: Uint8Array, format: Format) =>
@@ -148,9 +150,9 @@ export class App {
     void this.pump()
   }
 
-  /** Only affects the HTML snippets; nothing is re-processed. */
-  setPath(path: string) {
-    this.settings.path = path
+  /** Path and markup only affect the snippets; nothing is re-processed. */
+  setSnippet(patch: Partial<Pick<Settings, 'path' | 'markup'>>) {
+    Object.assign(this.settings, patch)
     this.save()
   }
 
@@ -182,16 +184,18 @@ export class App {
   }
 
   /** `<picture>` markup for a finished responsive set; null for CMS masters. */
-  html(item: Item): string | null {
+  snippet(item: Item): string | null {
     if (item.status !== 'done' || item.madeWith?.mode !== 'responsive') return null
-    return pictureHtml(item.madeWith.role, item.outputs, this.settings.path)
+    const { path, markup } = this.settings
+    return pictureMarkup(item.madeWith.role, item.outputs, { path, markup })
   }
 
-  allHtml(): string {
+  /** Every image's snippet, each labelled with its file name. */
+  allSnippets(): string {
     return this.done
       .map((item) => {
-        const html = this.html(item)
-        return html && `<!-- ${item.file.name} -->\n${html}`
+        const snippet = this.snippet(item)
+        return snippet && `${comment(this.settings.markup, item.file.name)}\n${snippet}`
       })
       .filter(Boolean)
       .join('\n\n')

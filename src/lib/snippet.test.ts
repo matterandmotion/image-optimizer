@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { manifest } from './manifest'
-import { normalisePath, pictureHtml, type SnippetOutput } from './snippet'
+import { comment, normalisePath, pictureMarkup, type SnippetOutput } from './snippet'
 
 const set = (
   base: string,
@@ -17,9 +17,9 @@ const set = (
     })),
   )
 
-describe('pictureHtml', () => {
+describe('pictureMarkup', () => {
   it('lazy content image: AVIF source, JPEG fallback, sizes=auto', () => {
-    expect(pictureHtml('content', set('hero', [400, 800], ['avif', 'jpeg']))).toBe(
+    expect(pictureMarkup('content', set('hero', [400, 800], ['avif', 'jpeg']))).toBe(
       [
         '<picture>',
         '  <source type="image/avif" srcset="/images/hero-400w.avif 400w, /images/hero-800w.avif 800w" sizes="auto, (min-width: 800px) 800px, 100vw">',
@@ -30,12 +30,10 @@ describe('pictureHtml', () => {
   })
 
   it('hero image loads eagerly with high priority', () => {
-    const html = pictureHtml(
-      'hero',
-      set('h', [640, 1280], ['avif', 'jpeg']),
-      'assets',
-      'A "big" view',
-    )
+    const html = pictureMarkup('hero', set('h', [640, 1280], ['avif', 'jpeg']), {
+      path: 'assets',
+      alt: 'A "big" view',
+    })
     expect(html).toContain('sizes="100vw"')
     expect(html).toContain('fetchpriority="high"')
     expect(html).not.toContain('loading="lazy"')
@@ -44,11 +42,37 @@ describe('pictureHtml', () => {
   })
 
   it('graphic: WebP source with PNG fallback', () => {
-    const html = pictureHtml('graphic', set('logo', [800, 1600], ['webp', 'png']), '')
+    const html = pictureMarkup('graphic', set('logo', [800, 1600], ['webp', 'png']), { path: '' })
     expect(html).toContain(
       '<source type="image/webp" srcset="logo-800w.webp 800w, logo-1600w.webp 1600w"',
     )
     expect(html).toContain('<img src="logo-1600w.png"')
+  })
+
+  it('JSX: camelCase props, numeric sizes, self-closing tags', () => {
+    expect(
+      pictureMarkup('content', set('hero', [400, 800], ['avif', 'jpeg']), { markup: 'jsx' }),
+    ).toBe(
+      [
+        '<picture>',
+        '  <source type="image/avif" srcSet="/images/hero-400w.avif 400w, /images/hero-800w.avif 800w" sizes="auto, (min-width: 800px) 800px, 100vw" />',
+        '  <img src="/images/hero-800w.jpg" srcSet="/images/hero-400w.jpg 400w, /images/hero-800w.jpg 800w" sizes="auto, (min-width: 800px) 800px, 100vw" width={800} height={533} alt="" loading="lazy" decoding="async" />',
+        '</picture>',
+      ].join('\n'),
+    )
+    const hero = pictureMarkup('hero', set('h', [640], ['avif', 'jpeg']), { markup: 'jsx' })
+    expect(hero).toContain('fetchPriority="high"')
+    expect(hero).not.toContain('fetchpriority')
+  })
+
+  it('escapes attribute values', () => {
+    const html = pictureMarkup('card', set('a', [400], ['avif', 'jpeg']), { path: '/x"&y/' })
+    expect(html).toContain('src="/x&quot;&amp;y/a-400w.jpg"')
+  })
+
+  it('comments in either markup, without closing them early', () => {
+    expect(comment('html', 'a--b.jpg')).toBe('<!-- a- -b.jpg -->')
+    expect(comment('jsx', 'a*/b.jpg')).toBe('{/* a* /b.jpg */}')
   })
 
   it('normalises the path', () => {
