@@ -26,6 +26,22 @@ The build output (`dist/`) is a static site. [`public/_headers`](public/_headers
 
 Hosts that don't read `_headers` need to send the same headers.
 
+## How it works
+
+Everything runs in a Web Worker in the browser:
+
+- [wasm-vips](https://github.com/kleisauke/wasm-vips) (libvips) decodes, applies EXIF orientation, converts colour profiles (Display P3, CMYK, …) to sRGB, resizes with Lanczos-3 and encodes JPEG (mozjpeg), WebP and PNG. Metadata is removed.
+- [jSquash](https://github.com/jamsinclair/jSquash) encodes AVIF with its multi-threaded libavif/libaom build.
+
+Output is byte-identical across browsers, so the engine is tested once, in Node (`src/engine/*.test.ts`).
+
+## Third-party software
+
+The site ships these as separate WebAssembly files:
+
+- wasm-vips: MIT. Contains libvips (LGPL-2.1-or-later) and the libraries listed in its [`versions.json`](https://github.com/kleisauke/wasm-vips/blob/master/versions.json), under their own licences.
+- @jsquash/avif: Apache-2.0. Contains libavif (BSD-2-Clause) and libaom (BSD-2-Clause, with the AOMedia patent licence).
+
 ## License
 
 [MIT](LICENSE)

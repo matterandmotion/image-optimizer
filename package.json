@@ -13,7 +13,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json && tsc -p tsconfig.test.json",
     "test": "vitest run --passWithNoTests",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
@@ -32,5 +32,9 @@
     "typescript": "~6.0.3",
     "vite": "^8.3.5",
     "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "@jsquash/avif": "2.1.1",
+    "wasm-vips": "0.0.19"
   }
 }
