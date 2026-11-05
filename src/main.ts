@@ -1,4 +1,6 @@
 import { mount } from 'svelte'
+// Inter with the optical-size axis: tighter at large sizes, more open at small ones.
+import '@fontsource-variable/inter/opsz.css'
 import './app.css'
 import App from './App.svelte'
 

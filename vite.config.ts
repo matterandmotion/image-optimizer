@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig, type Plugin } from 'vitest/config'
+import { configDefaults, defineConfig, type Plugin } from 'vitest/config'
 
 // The image engine needs SharedArrayBuffer, which only works when the page is
 // cross-origin isolated. Production gets these headers from public/_headers.
@@ -87,5 +87,5 @@ export default defineConfig({
   server: { headers: isolation },
   worker: { format: 'es' },
   optimizeDeps: { exclude: ['@jsquash/avif', 'wasm-vips'] },
-  test: { testTimeout: 30_000 },
+  test: { testTimeout: 30_000, exclude: [...configDefaults.exclude, 'e2e/**'] },
 })
