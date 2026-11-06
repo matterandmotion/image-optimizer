@@ -187,7 +187,7 @@
             >
               <span>Path</span>
               <input
-                class="w-28 rounded border border-neutral-200 bg-white px-1.5 py-0.5 font-mono text-neutral-900 outline-none focus-visible:outline-2 focus-visible:outline-blue-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100"
+                class="w-28 rounded border border-neutral-200 bg-white px-1.5 py-0.5 font-mono text-neutral-900 focus-visible:outline-2 focus-visible:outline-blue-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100"
                 value={path}
                 spellcheck="false"
                 oninput={(e) => onsnippet({ path: e.currentTarget.value })}
