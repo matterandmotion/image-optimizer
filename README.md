@@ -70,6 +70,8 @@ pnpm preview        # serve dist/ with production headers
 pnpm test:e2e       # browser tests against the production build (Playwright)
 ```
 
+Pull requests go to `staging`, which deploys to https://staging.image-optimizer-7ba.pages.dev. `staging` is merged into `main`, which deploys to the live site.
+
 ## Self-hosting
 
 `pnpm install && pnpm build`, then serve `dist/` as a static site. [`public/_headers`](public/_headers), which Cloudflare Pages and Netlify read, sets:
