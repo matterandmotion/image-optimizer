@@ -4,7 +4,7 @@ import encodeAvif, { init as initAvif } from '@jsquash/avif/encode.js'
 import Vips from 'wasm-vips'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { AvifEncoder, VariantSpec } from './types'
-import { chooseShrink, probe, processImage } from './vips-pipeline'
+import { chooseShrink, probe, processImage, rgbaToPng } from './vips-pipeline'
 
 // Test images are made with libvips' built-in profiles, so no binary fixtures are needed.
 
@@ -242,6 +242,26 @@ it('is deterministic', async () => {
   expect(a.map((o) => Buffer.from(o.bytes).toString('base64'))).toEqual(
     b.map((o) => Buffer.from(o.bytes).toString('base64')),
   )
+})
+
+describe('rgbaToPng', () => {
+  const rgba = (alpha: number) => {
+    const px = new Uint8Array(4 * 4 * 4)
+    for (let i = 0; i < px.length; i += 4) px.set([200, 100, 50, 255], i)
+    px[px.length - 1] = alpha
+    return px
+  }
+
+  it('drops the alpha band when every pixel is opaque', () => {
+    const png = vips.Image.newFromBuffer(rgbaToPng(vips, rgba(255), 4, 4))
+    expect([png.width, png.height, png.bands, png.hasAlpha()]).toEqual([4, 4, 3, false])
+    expect([...(png.writeToMemory() as Uint8Array).slice(0, 3)]).toEqual([200, 100, 50])
+  })
+
+  it('keeps it when any pixel is transparent', () => {
+    const png = vips.Image.newFromBuffer(rgbaToPng(vips, rgba(0), 4, 4))
+    expect([png.bands, png.hasAlpha()]).toEqual([4, true])
+  })
 })
 
 describe('classify', () => {

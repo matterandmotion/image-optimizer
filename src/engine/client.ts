@@ -56,6 +56,19 @@ export class Engine {
   }
 
   /**
+   * Decodes a file with the browser's own decoder (e.g. HEIC in Safari) into a lossless sRGB
+   * PNG that the other calls can read. Rejects if the browser can't decode it either.
+   */
+  decode(file: Blob): Promise<Blob> {
+    return this.enqueue(async () => {
+      await this.init()
+      const buf = await file.arrayBuffer()
+      const png = await this.call('decode', { buf }, [buf])
+      return new Blob([png as Uint8Array<ArrayBuffer>], { type: 'image/png' })
+    })
+  }
+
+  /**
    * Stops all work immediately: the running request and every queued one reject with
    * `CancelledError`. The next call starts a fresh worker.
    */

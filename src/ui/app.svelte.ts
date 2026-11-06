@@ -65,10 +65,15 @@ export class Item {
   /** The original rendered losslessly at a given width, for comparisons. */
   readonly originals = new Map<number, Promise<string>>()
 
+  /** What the engine reads: the file, or a PNG the browser decoded it to (e.g. HEIC in Safari). */
+  source: Blob
+
   constructor(
     readonly file: File,
     readonly base: string,
-  ) {}
+  ) {
+    this.source = file
+  }
 
   /** What a browser downloads at the largest size: the first (preferred) format at the largest width. */
   get primary(): Output | undefined {
@@ -177,7 +182,7 @@ export class App {
     let original = item.originals.get(output.width)
     if (!original) {
       original = this.reader
-        .process(item.file, [{ width: output.width, format: 'png', quality: 100 }])
+        .process(item.source, [{ width: output.width, format: 'png', quality: 100 }])
         .then(([o]) => URL.createObjectURL(blobOf(o.bytes, 'png')))
       item.originals.set(output.width, original)
       original.catch(() => item.originals.delete(output.width))
@@ -286,8 +291,8 @@ export class App {
 
   private async read(item: Item) {
     try {
-      const info = await this.reader.probe(item.file)
-      const [thumb] = await this.reader.process(item.file, [
+      const info = await this.probeOrDecode(item)
+      const [thumb] = await this.reader.process(item.source, [
         { width: 160, format: 'webp', quality: 75 },
       ])
       if (!this.items.includes(item)) return
@@ -299,8 +304,19 @@ export class App {
       if (e instanceof CancelledError) return
       item.status = 'error'
       item.error = /\.(heic|heif)$/i.test(item.file.name)
-        ? 'HEIC isn’t supported yet'
+        ? 'This browser can’t open HEIC'
         : 'Can’t read this file'
+    }
+  }
+
+  /** libvips reads most files; for the rest (HEIC in Safari, BMP, …) the browser may decode. */
+  private async probeOrDecode(item: Item): Promise<SourceInfo> {
+    try {
+      return await this.reader.probe(item.file)
+    } catch (e) {
+      if (e instanceof CancelledError) throw e
+      item.source = await this.reader.decode(item.file)
+      return this.reader.probe(item.source)
     }
   }
 
@@ -316,7 +332,7 @@ export class App {
         target.progress = { done: 0, total: 0 }
         try {
           const encoded = await this.engine.process(
-            target.file,
+            target.source,
             planVariants(target.info!, { ...settings, role }),
             (done, total) => (target.progress = { done, total }),
           )
