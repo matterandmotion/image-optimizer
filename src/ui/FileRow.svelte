@@ -88,6 +88,10 @@
             />
           </div>
         {/if}
+        <!-- The full message, under the name: the Status column only has room for a word. -->
+        {#if item.status === 'error'}
+          <p class="mt-0.5 text-xs break-words text-red-600 dark:text-red-400">{item.error}</p>
+        {/if}
       </div>
     </div>
   </td>
@@ -118,9 +122,7 @@
         >
       </span>
     {:else if item.status === 'error'}
-      <span class="block truncate text-red-600 dark:text-red-400" title={item.error}
-        >{item.error}</span
-      >
+      <span class="text-red-600 dark:text-red-400">Failed</span>
     {:else}
       <span class="text-neutral-500 dark:text-neutral-400">
         {{ reading: 'Reading', queued: 'Queued', done: 'Done' }[item.status]}
