@@ -11,7 +11,9 @@ Drop images or folders on the page, choose files, or paste. Then pick an output:
 - **Responsive set**: several widths of each image in modern formats, plus `<picture>` markup to paste into your site. For sites you build yourself.
 - **CMS master**: one high-quality file per image, no wider than a maximum width. For a CMS or site builder that makes its own sizes (Wagtail, Payload, Webflow, Framer, …), so the stored original isn't needlessly large.
 
-Download everything as a ZIP, or single files from a row. Tap a thumbnail to compare an output with the original: drag the divider and switch between fit and actual pixels.
+Download everything as a ZIP, or single files from a row. In Chrome and Edge, _Save to folder_ writes everything straight into a folder you pick, such as your site's `public/images`. Tap a thumbnail to compare an output with the original: drag the divider and switch between fit and actual pixels.
+
+After the first visit the tool works offline. The footer says "Works offline." once it's ready, and offers a reload when a new version has been published.
 
 ### Responsive set
 
@@ -27,8 +29,13 @@ Each image has a role, which decides its widths and the `sizes` attribute in the
 - **Images are never enlarged.** Widths larger than the original are dropped. If the original falls between two widths, its own width is added, unless it's within 15% of the largest one kept.
 - **Photos** become AVIF with a JPEG fallback, or a WebP fallback if they're transparent. Quality is Lower, Balanced or Higher.
 - **Graphics** (logos, screenshots, flat illustrations) become lossless WebP with a PNG fallback. PNG, WebP and other non-JPEG files are checked for this automatically; JPEGs are treated as photos. You can change any row's role.
-- **Markup.** Open a row to see its `<picture>` element. Set _Path_ to the folder the images will live in on your site. _Copy HTML_ copies the markup for every image. Hero images load eagerly with `fetchpriority="high"`; the rest are lazy-loaded with `sizes="auto, …"`. The `sizes` values are starting points: adjust them to your layout.
-- **`manifest.json`** in the ZIP lists every file with its format, width, height and size, plus each image's markup.
+- **Markup.** Open a row to see its `<picture>` element.
+  - Set _Path_ to the folder the images will live in on your site.
+  - Choose HTML or JSX. HTML also works in Astro, Svelte and Vue templates; JSX uses React's prop names (`srcSet`, `fetchPriority`).
+  - _Copy HTML_ (or _Copy JSX_) copies the markup for every image.
+  - Hero images load eagerly with `fetchpriority="high"`; the rest are lazy-loaded with `sizes="auto, …"`. The `sizes` values are starting points: adjust them to your layout.
+- **Placeholder.** Optionally, each `<img>` gets the image's average colour as an inline `background-color`, shown until the image loads. Off by default, because a strict Content Security Policy on your site blocks inline styles. Transparent images don’t get one.
+- **`manifest.json`**, in the ZIP or the folder, lists every file with its format, width, height and size, plus each image's markup and average colour. Saving to a folder replaces files with the same names. The exception is a `manifest.json` this tool didn't write, such as a web app manifest, which is left alone.
 
 ### CMS master
 
@@ -41,13 +48,13 @@ One file per image, up to 1920, 2560 or 3840 px wide: JPEG at quality 90 for pho
 - Metadata is removed: EXIF, GPS location, camera details.
 - Resizing uses Lanczos-3.
 
-Reads JPEG, PNG, WebP, AVIF, GIF (first frame) and TIFF. HEIC isn't supported yet.
+Reads JPEG, PNG, WebP, AVIF, GIF (first frame) and TIFF. Other formats are handed to the browser's own decoder: that opens BMP everywhere and HEIC in Safari. HEIC doesn't open in Chrome or Firefox yet.
 
 ## Privacy
 
 Images are decoded, resized and encoded on your device, in the page. The Content Security Policy (`connect-src 'self'`) stops the page from sending data to any other server, and there are no analytics, trackers or third-party scripts. The font is served from the same site.
 
-Your settings (output, role, quality, maximum width, path) are kept in your browser's local storage.
+Your settings (output, role, quality, maximum width, path, markup, placeholder) are kept in your browser's local storage. A service worker keeps a copy of the app in the browser's cache, so it works offline; it only ever fetches the app's own files.
 
 ## Development
 
@@ -80,8 +87,9 @@ Everything runs in a Web Worker in the browser:
 
 - [wasm-vips](https://github.com/kleisauke/wasm-vips) (libvips) decodes, applies EXIF orientation, converts colour profiles (Display P3, CMYK, …) to sRGB, resizes with Lanczos-3 and encodes JPEG (mozjpeg), WebP and PNG. Metadata is removed.
 - [jSquash](https://github.com/jamsinclair/jSquash) encodes AVIF with its multi-threaded libavif/libaom build.
+- Files libvips can't read are decoded by the browser (`createImageBitmap`), drawn to an sRGB canvas and passed on as lossless PNG.
 
-Output is byte-identical across browsers, so the engine is tested once, in Node (`src/engine/*.test.ts`).
+For files libvips reads, output is byte-identical across browsers, so the engine is tested once, in Node (`src/engine/*.test.ts`).
 
 ## Third-party software
 
