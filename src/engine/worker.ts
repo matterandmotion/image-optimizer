@@ -57,6 +57,13 @@ self.onmessage = async ({ data: req }: MessageEvent<Request>) => {
       }
     }
   } catch (e) {
-    post({ id: req.id, kind: 'error', message: e instanceof Error ? e.message : String(e) })
+    post({ id: req.id, kind: 'error', message: describe(e) })
   }
+}
+
+/** Emscripten's thread pool rejects with the ErrorEvent of a worker that failed to start. */
+function describe(e: unknown): string {
+  if (e instanceof Error) return e.message
+  if (e instanceof ErrorEvent) return e.message || 'An encoder worker failed to start'
+  return String(e)
 }

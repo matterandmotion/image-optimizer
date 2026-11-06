@@ -2,6 +2,7 @@
   import { formatBytes, formatList } from './lib/format'
   import { ROLE_WIDTHS, type PlanSettings, type Role } from './lib/plan'
   import { App } from './ui/app.svelte'
+  import { Offline } from './ui/offline.svelte'
   import Compare from './ui/Compare.svelte'
   import FileRow from './ui/FileRow.svelte'
   import { filesFromDataTransfer, save } from './ui/files'
@@ -10,6 +11,7 @@
   import Select from './ui/Select.svelte'
 
   const app = new App()
+  const offline = new Offline()
 
   let input: HTMLInputElement
   let dragging = $state(false)
@@ -222,8 +224,23 @@
     </div>
   {/if}
 
-  <footer class="mt-auto pt-10 text-sm text-neutral-500">
-    Files are processed on this device and never uploaded.
+  <footer
+    class="mt-auto flex flex-wrap justify-between gap-x-6 gap-y-1 pt-10 text-sm text-neutral-500"
+  >
+    <p>
+      Files are processed on this device and never uploaded.{offline.ready ? ' Works offline.' : ''}
+    </p>
+    {#if offline.update}
+      <p>
+        A new version is ready.
+        <button
+          type="button"
+          class="font-medium text-neutral-900 hover:underline dark:text-neutral-100"
+          onclick={() => offline.apply()}
+          >{app.items.length ? 'Reload (clears the list)' : 'Reload'}</button
+        >
+      </p>
+    {/if}
   </footer>
 </div>
 
