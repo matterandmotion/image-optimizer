@@ -15,7 +15,7 @@
 <label
   class="relative inline-flex items-center gap-1.5 rounded-md border border-neutral-200 py-1.5 pr-7 pl-2.5 text-sm focus-within:outline-2 focus-within:outline-blue-600 dark:border-neutral-800"
 >
-  <span class="text-neutral-500">{label}</span>
+  <span class="text-neutral-500 dark:text-neutral-400">{label}</span>
   <select
     class="cursor-pointer appearance-none bg-transparent font-medium outline-none"
     onchange={(e) => onchange(options[e.currentTarget.selectedIndex].value)}

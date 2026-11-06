@@ -148,7 +148,7 @@ test('saves into a folder, leaving a foreign manifest.json alone', async ({ page
   })
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   await page.getByRole('button', { name: 'Save to folder' }).click()
-  await expect(page.getByRole('status')).toHaveText(
+  await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
     'Saved 6 files to “site”, replacing 1. The folder’s own manifest.json wasn’t replaced.',
   )
   let files = await folder()
@@ -170,9 +170,13 @@ test('saves into a folder, leaving a foreign manifest.json alone', async ({ page
     await dir.removeEntry('manifest.json')
   })
   await page.getByRole('button', { name: 'Save to folder' }).click()
-  await expect(page.getByRole('status')).toHaveText('Saved 7 files to “site”, replacing 6.')
+  await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
+    'Saved 7 files to “site”, replacing 6.',
+  )
   files = await folder()
   expect(JSON.parse(files['manifest.json']).generator).toBe('image-optimizer')
   await page.getByRole('button', { name: 'Save to folder' }).click()
-  await expect(page.getByRole('status')).toHaveText('Saved 7 files to “site”, replacing 7.')
+  await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
+    'Saved 7 files to “site”, replacing 7.',
+  )
 })

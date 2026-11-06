@@ -46,7 +46,7 @@
       class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-neutral-200 px-4 py-3 text-sm dark:border-neutral-800"
     >
       <h2 class="min-w-0 truncate font-semibold">{output.name}</h2>
-      <span class="text-neutral-500 tabular-nums">
+      <span class="text-neutral-500 tabular-nums dark:text-neutral-400">
         {output.width} × {output.height} · {formatBytes(output.blob.size)} · {saved} smaller than the
         original ({formatBytes(item.file.size)})
       </span>
@@ -54,7 +54,7 @@
       <Segmented label="Zoom" value={zoom} options={ZOOMS} onchange={(z) => (zoom = z)} />
       <button
         type="button"
-        class="flex size-7 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-900 dark:hover:text-neutral-100"
+        class="flex size-7 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-900 dark:hover:text-neutral-100"
         aria-label="Close"
         onclick={() => dialog.close()}
       >
@@ -121,7 +121,9 @@
           </div>
         {/if}
       {:else}
-        <p class="flex h-full items-center justify-center text-sm text-neutral-500">
+        <p
+          class="flex h-full items-center justify-center text-sm text-neutral-500 dark:text-neutral-400"
+        >
           Preparing the original…
         </p>
       {/if}

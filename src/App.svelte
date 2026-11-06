@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { tick } from 'svelte'
   import { formatBytes, formatList } from './lib/format'
   import { ROLE_WIDTHS, type PlanSettings, type Role } from './lib/plan'
-  import { App } from './ui/app.svelte'
+  import { announcer } from './ui/announce.svelte'
+  import { App, type Item } from './ui/app.svelte'
   import { Offline } from './ui/offline.svelte'
   import Compare from './ui/Compare.svelte'
   import FileRow from './ui/FileRow.svelte'
@@ -14,6 +16,8 @@
   const offline = new Offline()
 
   let input: HTMLInputElement
+  let dropzone: HTMLButtonElement | undefined = $state()
+  let table: HTMLTableElement | undefined = $state()
   let dragging = $state(false)
   let zipping = $state(false)
   let copied = $state(false)
@@ -41,8 +45,25 @@
   async function copyAll() {
     if (await copy(app.allSnippets())) {
       copied = true
+      announcer.say('Copied to the clipboard.')
       setTimeout(() => (copied = false), 1500)
     }
+  }
+
+  // Removing a row takes the focused button with it. Move focus to the Remove button now in
+  // its place (or the one before), or to the drop zone once the list is empty.
+  async function remove(item: Item) {
+    const index = app.items.indexOf(item)
+    app.remove(item)
+    await tick()
+    const buttons = table?.querySelectorAll<HTMLElement>('[data-remove]') ?? []
+    ;(buttons[Math.min(index, buttons.length - 1)] ?? dropzone)?.focus()
+  }
+
+  async function clear() {
+    app.clear()
+    await tick()
+    dropzone?.focus()
   }
 
   async function downloadZip() {
@@ -125,159 +146,168 @@
   <header class="flex items-baseline justify-between gap-4">
     <h1 class="text-base font-semibold">Image Optimizer</h1>
     {#if done}
-      <p class="text-sm text-neutral-500 tabular-nums">
+      <p class="text-sm text-neutral-500 tabular-nums dark:text-neutral-400">
         {formatBytes(totals.original)} → {formatBytes(totals.output)}
       </p>
     {/if}
   </header>
 
-  {#if app.items.length === 0}
-    <button
-      type="button"
-      onclick={() => input.click()}
-      class={[
-        'mt-6 flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed transition-colors focus-visible:outline-2 focus-visible:outline-blue-600',
-        dragging
-          ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/30'
-          : 'border-neutral-300 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-600',
-      ]}
-    >
-      <span class="text-lg font-medium">Drop images here</span>
-      <span class="mt-1 text-sm text-neutral-500"
-        >or choose files. Folders and pasting work too.</span
+  <main class="mt-6 flex flex-1 flex-col">
+    {#if app.items.length === 0}
+      <button
+        bind:this={dropzone}
+        type="button"
+        onclick={() => input.click()}
+        class={[
+          'flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 motion-reduce:transition-none',
+          dragging
+            ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/30'
+            : 'border-neutral-300 hover:border-neutral-400 dark:border-neutral-700 dark:hover:border-neutral-600',
+        ]}
       >
-    </button>
-  {:else}
-    <div class="mt-6 flex flex-wrap items-center gap-2">
-      <Segmented
-        label="Output"
-        value={app.settings.mode}
-        options={MODES}
-        onchange={(mode) => app.set({ mode })}
-      />
-      {#if app.settings.mode === 'responsive'}
-        <Select
-          label="Role"
-          value={app.settings.role}
-          options={ROLES}
-          onchange={(role) => app.set({ role })}
+        <span class="text-lg font-medium">Drop images here</span>
+        <span class="mt-1 text-sm text-neutral-500 dark:text-neutral-400"
+          >or choose files. Folders and pasting work too.</span
+        >
+      </button>
+    {:else}
+      <div class="flex flex-wrap items-center gap-2">
+        <Segmented
+          label="Output"
+          value={app.settings.mode}
+          options={MODES}
+          onchange={(mode) => app.set({ mode })}
         />
-        <Select
-          label="Quality"
-          value={app.settings.quality}
-          options={QUALITIES}
-          onchange={(quality) => app.set({ quality })}
-        />
-      {:else}
-        <Select
-          label="Max width"
-          value={app.settings.masterWidth}
-          options={MASTER_WIDTHS}
-          onchange={(masterWidth) => app.set({ masterWidth })}
-        />
-      {/if}
-      <!-- The actions wrap as one group, after the settings. -->
-      <div class="flex flex-wrap gap-2 sm:ml-auto">
-        <button type="button" class={secondary} onclick={() => input.click()}>Add images</button>
         {#if app.settings.mode === 'responsive'}
-          <button type="button" class={secondary} disabled={!done || pending > 0} onclick={copyAll}>
-            {copied ? 'Copied' : `Copy ${app.settings.markup === 'jsx' ? 'JSX' : 'HTML'}`}
-          </button>
+          <Select
+            label="Role"
+            value={app.settings.role}
+            options={ROLES}
+            onchange={(role) => app.set({ role })}
+          />
+          <Select
+            label="Quality"
+            value={app.settings.quality}
+            options={QUALITIES}
+            onchange={(quality) => app.set({ quality })}
+          />
+        {:else}
+          <Select
+            label="Max width"
+            value={app.settings.masterWidth}
+            options={MASTER_WIDTHS}
+            onchange={(masterWidth) => app.set({ masterWidth })}
+          />
         {/if}
-        {#if canSaveToFolder}
+        <!-- The actions wrap as one group, after the settings. -->
+        <div class="flex flex-wrap gap-2 sm:ml-auto">
+          <button type="button" class={secondary} onclick={() => input.click()}>Add images</button>
+          {#if app.settings.mode === 'responsive'}
+            <button
+              type="button"
+              class={secondary}
+              disabled={!done || pending > 0}
+              onclick={copyAll}
+            >
+              {copied ? 'Copied' : `Copy ${app.settings.markup === 'jsx' ? 'JSX' : 'HTML'}`}
+            </button>
+          {/if}
+          {#if canSaveToFolder}
+            <button
+              type="button"
+              class={secondary}
+              disabled={!done || pending > 0 || saving}
+              onclick={saveFolder}
+            >
+              {saving ? 'Saving…' : 'Save to folder'}
+            </button>
+          {/if}
           <button
             type="button"
-            class={secondary}
-            disabled={!done || pending > 0 || saving}
-            onclick={saveFolder}
+            class={primary}
+            disabled={!done || pending > 0 || zipping}
+            onclick={downloadZip}
           >
-            {saving ? 'Saving…' : 'Save to folder'}
+            {zipping ? 'Preparing…' : 'Download ZIP'}
           </button>
-        {/if}
-        <button
-          type="button"
-          class={primary}
-          disabled={!done || pending > 0 || zipping}
-          onclick={downloadZip}
-        >
-          {zipping ? 'Preparing…' : 'Download ZIP'}
-        </button>
+        </div>
       </div>
-    </div>
 
-    <p
-      role="status"
-      class={note
-        ? ['mt-3 text-sm', note.error ? 'text-red-600 dark:text-red-400' : 'font-medium']
-        : 'sr-only'}
-    >
-      {#if note}{note.text}{/if}
-    </p>
-    <p class="mt-3 text-sm text-neutral-500">{summary}</p>
+      <p
+        role="status"
+        class={note
+          ? ['mt-3 text-sm', note.error ? 'text-red-600 dark:text-red-400' : 'font-medium']
+          : 'sr-only'}
+      >
+        {#if note}{note.text}{/if}
+      </p>
+      <p class="mt-3 text-sm text-neutral-500 dark:text-neutral-400">{summary}</p>
 
-    <!-- Fixed column widths (set on the header cells), so nothing shifts while files process. -->
-    <table class="mt-4 w-full table-fixed text-sm">
-      <thead class="text-neutral-500">
-        <tr class="border-b border-neutral-200 dark:border-neutral-800">
-          <th class="py-2 pr-3 text-left font-medium">File</th>
-          <th class="hidden w-24 px-3 text-right font-medium sm:table-cell">Original</th>
-          <th
-            class="w-20 px-3 text-right font-medium sm:w-24"
-            title="The file a browser downloads at the largest size"
+      <!-- Fixed column widths (set on the header cells), so nothing shifts while files process. -->
+      <table bind:this={table} class="mt-4 w-full table-fixed text-sm">
+        <thead class="text-neutral-500 dark:text-neutral-400">
+          <tr class="border-b border-neutral-200 dark:border-neutral-800">
+            <th class="py-2 pr-3 text-left font-medium">File</th>
+            <th class="hidden w-24 px-3 text-right font-medium sm:table-cell">Original</th>
+            <th
+              class="w-20 px-3 text-right font-medium sm:w-24"
+              title="The file a browser downloads at the largest size"
+            >
+              Largest
+            </th>
+            <th class="hidden w-20 px-3 text-right font-medium sm:table-cell">Saved</th>
+            <th class="w-20 pl-3 text-left font-medium sm:w-36">Status</th>
+            <th class="w-9"><span class="sr-only">Remove</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each app.items as item (item.id)}
+            <FileRow
+              {item}
+              role={app.roleFor(item)}
+              snippet={app.snippet(item)}
+              path={app.settings.path}
+              markup={app.settings.markup}
+              placeholder={app.settings.placeholder}
+              onsnippet={(patch) => app.setSnippet(patch)}
+              onrole={(role) => app.setRole(item, role)}
+              oncompare={(output) => app.compare(item, output)}
+              onremove={() => remove(item)}
+            />
+          {/each}
+        </tbody>
+      </table>
+
+      <div
+        class="mt-4 flex items-center justify-between gap-4 text-sm text-neutral-500 tabular-nums dark:text-neutral-400"
+        aria-live="polite"
+      >
+        <span>
+          {pending ? `${done} of ${done + pending} done` : `${done} done`}{failed
+            ? ` · ${failed} couldn’t be read`
+            : ''}
+        </span>
+        <span class="flex items-center gap-4">
+          {#if done && totals.original > totals.output}
+            <span
+              >Saved <span class="font-semibold text-neutral-900 dark:text-neutral-100"
+                >{formatBytes(totals.original - totals.output)}</span
+              ></span
+            >
+          {/if}
+          <button
+            type="button"
+            class="hover:text-neutral-900 dark:hover:text-neutral-100"
+            onclick={clear}>Clear</button
           >
-            Largest
-          </th>
-          <th class="hidden w-20 px-3 text-right font-medium sm:table-cell">Saved</th>
-          <th class="w-20 pl-3 text-left font-medium sm:w-36">Status</th>
-          <th class="w-9"><span class="sr-only">Remove</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each app.items as item (item.id)}
-          <FileRow
-            {item}
-            role={app.roleFor(item)}
-            snippet={app.snippet(item)}
-            path={app.settings.path}
-            markup={app.settings.markup}
-            placeholder={app.settings.placeholder}
-            onsnippet={(patch) => app.setSnippet(patch)}
-            onrole={(role) => app.setRole(item, role)}
-            oncompare={(output) => app.compare(item, output)}
-            onremove={() => app.remove(item)}
-          />
-        {/each}
-      </tbody>
-    </table>
-
-    <div
-      class="mt-4 flex items-center justify-between gap-4 text-sm text-neutral-500 tabular-nums"
-      aria-live="polite"
-    >
-      <span>
-        {pending ? `${done} of ${done + pending} done` : `${done} done`}{failed
-          ? ` · ${failed} couldn’t be read`
-          : ''}
-      </span>
-      <span class="flex items-center gap-4">
-        {#if done && totals.original > totals.output}
-          <span
-            >Saved <span class="font-semibold text-neutral-900 dark:text-neutral-100"
-              >{formatBytes(totals.original - totals.output)}</span
-            ></span
-          >
-        {/if}
-        <button
-          type="button"
-          class="hover:text-neutral-900 dark:hover:text-neutral-100"
-          onclick={() => app.clear()}>Clear</button
-        >
-      </span>
-    </div>
-  {/if}
+        </span>
+      </div>
+    {/if}
+    <p role="status" class="sr-only">{announcer.text}</p>
+  </main>
 
   <footer
-    class="mt-auto flex flex-wrap justify-between gap-x-6 gap-y-1 pt-10 text-sm text-neutral-500"
+    class="mt-auto flex flex-wrap justify-between gap-x-6 gap-y-1 pt-10 text-sm text-neutral-500 dark:text-neutral-400"
   >
     <p>
       Files are processed on this device and never uploaded.{offline.ready ? ' Works offline.' : ''}
@@ -307,6 +337,7 @@
 
 {#if dragging && app.items.length}
   <div
+    aria-hidden="true"
     class="pointer-events-none fixed inset-3 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-600 bg-white/70 text-lg font-medium dark:bg-neutral-950/70"
   >
     Drop to add images
