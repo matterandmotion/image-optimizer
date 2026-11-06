@@ -2,7 +2,52 @@
 
 Resize, compress and convert images for websites, in the browser. Files are processed on your device and never uploaded.
 
-**Status:** early development, not usable yet.
+**https://image-optimizer-7ba.pages.dev**
+
+## Using it
+
+Drop images or folders on the page, choose files, or paste. Then pick an output:
+
+- **Responsive set**: several widths of each image in modern formats, plus `<picture>` markup to paste into your site. For sites you build yourself.
+- **CMS master**: one high-quality file per image, no wider than a maximum width. For a CMS or site builder that makes its own sizes (Wagtail, Payload, Webflow, Framer, …), so the stored original isn't needlessly large.
+
+Download everything as a ZIP, or single files from a row. Tap a thumbnail to compare an output with the original: drag the divider and switch between fit and actual pixels.
+
+### Responsive set
+
+Each image has a role, which decides its widths and the `sizes` attribute in the markup:
+
+| Role    | Widths (px)                | `sizes`                                                     |
+| ------- | -------------------------- | ----------------------------------------------------------- |
+| Hero    | 640, 960, 1280, 1920, 2560 | `100vw`                                                     |
+| Content | 400, 800, 1200, 1600       | `(min-width: 800px) 800px, 100vw`                           |
+| Card    | 400, 800                   | `(min-width: 1024px) 400px, (min-width: 640px) 50vw, 100vw` |
+| Graphic | 800, 1600                  | `(min-width: 800px) 800px, 100vw`                           |
+
+- **Images are never enlarged.** Widths larger than the original are dropped. If the original falls between two widths, its own width is added, unless it's within 15% of the largest one kept.
+- **Photos** become AVIF with a JPEG fallback, or a WebP fallback if they're transparent. Quality is Lower, Balanced or Higher.
+- **Graphics** (logos, screenshots, flat illustrations) become lossless WebP with a PNG fallback. PNG, WebP and other non-JPEG files are checked for this automatically; JPEGs are treated as photos. You can change any row's role.
+- **Markup.** Open a row to see its `<picture>` element. Set _Path_ to the folder the images will live in on your site. _Copy HTML_ copies the markup for every image. Hero images load eagerly with `fetchpriority="high"`; the rest are lazy-loaded with `sizes="auto, …"`. The `sizes` values are starting points: adjust them to your layout.
+- **`manifest.json`** in the ZIP lists every file with its format, width, height and size, plus each image's markup.
+
+### CMS master
+
+One file per image, up to 1920, 2560 or 3840 px wide: JPEG at quality 90 for photos (high, because a CMS re-encodes its own sizes), PNG for graphics and transparent images.
+
+### Every image
+
+- EXIF orientation is applied, so the pixels are the right way up.
+- Colour profiles (Display P3, Adobe RGB, CMYK, …) are converted to sRGB.
+- Metadata is removed: EXIF, GPS location, camera details.
+- Resizing uses Lanczos-3.
+
+Reads JPEG, PNG, WebP, AVIF, GIF (first frame) and TIFF. HEIC isn't supported yet.
+
+## Privacy
+
+Images are decoded, resized and encoded on your device, in the page. The Content Security Policy (`connect-src 'self'`) stops the page from sending data to any other server, and there are no analytics, trackers or third-party scripts. The font is served from the same site.
+
+Your settings (output, role, quality, maximum width, path) are kept in your browser's local storage.
 
 ## Development
 
@@ -15,11 +60,12 @@ pnpm check          # type check
 pnpm test           # unit tests
 pnpm build          # production build in dist/
 pnpm preview        # serve dist/ with production headers
+pnpm test:e2e       # browser tests against the production build (Playwright)
 ```
 
-## Deployment
+## Self-hosting
 
-The build output (`dist/`) is a static site. [`public/_headers`](public/_headers) sets:
+`pnpm install && pnpm build`, then serve `dist/` as a static site. [`public/_headers`](public/_headers), which Cloudflare Pages and Netlify read, sets:
 
 - `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy`, which the image engine needs for `SharedArrayBuffer`
 - a Content Security Policy that blocks requests to other origins
