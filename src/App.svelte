@@ -240,6 +240,7 @@
             snippet={app.snippet(item)}
             path={app.settings.path}
             markup={app.settings.markup}
+            placeholder={app.settings.placeholder}
             onsnippet={(patch) => app.setSnippet(patch)}
             onrole={(role) => app.setRole(item, role)}
             oncompare={(output) => app.compare(item, output)}

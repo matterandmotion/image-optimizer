@@ -65,6 +65,17 @@ describe('pictureMarkup', () => {
     expect(hero).not.toContain('fetchpriority')
   })
 
+  it('placeholder colour as an inline style, in either markup', () => {
+    const outputs = set('a', [400], ['avif', 'jpeg'])
+    expect(pictureMarkup('content', outputs, { background: '#847d8e' })).toContain(
+      'decoding="async" style="background-color: #847d8e">',
+    )
+    expect(pictureMarkup('content', outputs, { background: '#847d8e', markup: 'jsx' })).toContain(
+      `decoding="async" style={{ backgroundColor: '#847d8e' }} />`,
+    )
+    expect(pictureMarkup('content', outputs, { background: null })).not.toContain('style')
+  })
+
   it('escapes attribute values', () => {
     const html = pictureMarkup('card', set('a', [400], ['avif', 'jpeg']), { path: '/x"&y/' })
     expect(html).toContain('src="/x&quot;&amp;y/a-400w.jpg"')
@@ -89,11 +100,12 @@ describe('manifest', () => {
   it('lists outputs and markup', () => {
     const outputs = set('hero', [400], ['avif', 'jpeg']).map((o) => ({ ...o, bytes: 1000 }))
     const json = JSON.parse(
-      manifest('responsive', '/img/', [
+      manifest('responsive', { path: '/img/', placeholder: true }, [
         {
           base: 'hero',
           role: 'content',
           source: { file: 'Hero.jpg', width: 400, height: 267, bytes: 50_000 },
+          colour: '#847d8e',
           outputs,
         },
       ]),
@@ -103,15 +115,18 @@ describe('manifest', () => {
       { file: 'hero-400w.jpg', format: 'jpeg', width: 400, height: 267, bytes: 1000 },
     ])
     expect(json.images[0].html).toContain('/img/hero-400w.avif 400w')
+    expect(json.images[0].color).toBe('#847d8e')
+    expect(json.images[0].html).toContain('style="background-color: #847d8e"')
   })
 
   it('leaves markup out for CMS masters', () => {
     const json = JSON.parse(
-      manifest('master', '/img/', [
+      manifest('master', { path: '/img/', placeholder: false }, [
         {
           base: 'hero',
           role: 'content',
           source: { file: 'Hero.jpg', width: 3000, height: 2000, bytes: 9e6 },
+          colour: null,
           outputs: [],
         },
       ]),

@@ -27,6 +27,8 @@ export interface SourceInfo {
   orientation: number
   /** Flat-colour graphics (logos, illustrations, screenshots) suit lossless formats. */
   kind: 'photo' | 'graphic'
+  /** Average colour (`#rrggbb`), to show while the image loads; null if it has transparency. */
+  colour: string | null
 }
 
 export interface EncodedVariant {

@@ -36,8 +36,15 @@ export interface Settings extends PlanSettings {
   path: string
   /** Snippet syntax. */
   markup: Markup
+  /** Give each image its average colour as a background until it loads. */
+  placeholder: boolean
 }
-const DEFAULTS: Settings = { ...DEFAULT_SETTINGS, path: '/images/', markup: 'html' }
+const DEFAULTS: Settings = {
+  ...DEFAULT_SETTINGS,
+  path: '/images/',
+  markup: 'html',
+  placeholder: false,
+}
 
 /** Engine output buffers are transferred copies, never shared memory. */
 const blobOf = (bytes: Uint8Array, format: Format) =>
@@ -150,8 +157,8 @@ export class App {
     void this.pump()
   }
 
-  /** Path and markup only affect the snippets; nothing is re-processed. */
-  setSnippet(patch: Partial<Pick<Settings, 'path' | 'markup'>>) {
+  /** These only affect the snippets; nothing is re-processed. */
+  setSnippet(patch: Partial<Pick<Settings, 'path' | 'markup' | 'placeholder'>>) {
     Object.assign(this.settings, patch)
     this.save()
   }
@@ -186,8 +193,9 @@ export class App {
   /** `<picture>` markup for a finished responsive set; null for CMS masters. */
   snippet(item: Item): string | null {
     if (item.status !== 'done' || item.madeWith?.mode !== 'responsive') return null
-    const { path, markup } = this.settings
-    return pictureMarkup(item.madeWith.role, item.outputs, { path, markup })
+    const { path, markup, placeholder } = this.settings
+    const background = placeholder ? (item.info?.colour ?? null) : null
+    return pictureMarkup(item.madeWith.role, item.outputs, { path, markup, background })
   }
 
   /** Every image's snippet, each labelled with its file name. */
@@ -225,7 +233,7 @@ export class App {
     const files = done.flatMap((item) => item.outputs.map((o) => ({ name: o.name, blob: o.blob })))
     const json = manifest(
       this.settings.mode,
-      this.settings.path,
+      this.settings,
       done.map((item) => ({
         base: item.base,
         role: item.madeWith?.role ?? this.roleFor(item),
@@ -235,6 +243,7 @@ export class App {
           height: item.info?.height ?? 0,
           bytes: item.file.size,
         },
+        colour: item.info?.colour ?? null,
         outputs: item.outputs.map((o) => ({ ...o, bytes: o.blob.size })),
       })),
     )

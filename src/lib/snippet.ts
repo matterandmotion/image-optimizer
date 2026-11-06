@@ -36,8 +36,20 @@ export type Markup = 'html' | 'jsx'
 
 const JSX_NAMES: Record<string, string> = { srcset: 'srcSet', fetchpriority: 'fetchPriority' }
 
-function tag(markup: Markup, name: string, attrs: [string, string | number][]): string {
+/** Inline CSS, with camelCase property names (as in JSX). */
+type Style = Record<string, string>
+
+const kebab = (prop: string) => prop.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+const jsString = (s: string) => `'${s.replace(/[\\']/g, '\\$&')}'`
+
+function tag(markup: Markup, name: string, attrs: [string, string | number | Style][]): string {
   const parts = attrs.map(([key, value]) => {
+    if (typeof value === 'object') {
+      const entries = Object.entries(value)
+      return markup === 'html'
+        ? `${key}="${escape(entries.map(([k, v]) => `${kebab(k)}: ${v}`).join('; '))}"`
+        : `${key}={{ ${entries.map(([k, v]) => `${k}: ${jsString(v)}`).join(', ')} }}`
+    }
     if (markup === 'html') return `${key}="${escape(String(value))}"`
     const prop = JSX_NAMES[key] ?? key
     return typeof value === 'number' ? `${prop}={${value}}` : `${prop}="${escape(value)}"`
@@ -65,7 +77,14 @@ export function pictureMarkup(
     path = '/images/',
     alt = '',
     markup = 'html',
-  }: { path?: string; alt?: string; markup?: Markup } = {},
+    background = null,
+  }: {
+    path?: string
+    alt?: string
+    markup?: Markup
+    /** A colour to show until the image has loaded (an inline style). */
+    background?: string | null
+  } = {},
 ): string {
   const base = normalisePath(path)
   const byFormat = new Map<Format, SnippetOutput[]>()
@@ -110,6 +129,7 @@ export function pictureMarkup(
         ['height', largest.height],
         ['alt', alt],
         ...loading,
+        ...(background ? [['style', { backgroundColor: background }] as [string, Style]] : []),
       ]),
   )
   lines.push('</picture>')
