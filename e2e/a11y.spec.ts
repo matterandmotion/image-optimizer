@@ -18,6 +18,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await page.locator('input[type=file]').setInputFiles([
       { name: 'photo.jpg', mimeType: 'image/jpeg', buffer: await makeJpeg(page, 1000, 600) },
       { name: 'logo.png', mimeType: 'image/png', buffer: await makePng(page, 600, 400) },
+      // A failed row, for the contrast of its message.
+      { name: 'broken.heic', mimeType: 'image/heic', buffer: Buffer.from('not a HEIC') },
     ])
     // While processing: the progress bar needs a name.
     await expect(page.getByRole('progressbar', { name: 'Processing photo.jpg' })).toBeVisible()
