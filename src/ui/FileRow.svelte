@@ -4,6 +4,7 @@
   import type { Role } from '../lib/plan'
   import type { Markup } from '../lib/snippet'
   import type { Item, Output } from './app.svelte'
+  import { announcer } from './announce.svelte'
   import InlineSelect from './InlineSelect.svelte'
   import { copy, MARKUPS, ROLES } from './options'
 
@@ -43,6 +44,7 @@
   async function copySnippet() {
     if (snippet && (await copy(snippet))) {
       copied = true
+      announcer.say('Copied to the clipboard.')
       setTimeout(() => (copied = false), 1500)
     }
   }
@@ -73,7 +75,7 @@
           {item.file.name}
         </button>
         {#if item.info}
-          <div class="flex items-center gap-1.5 text-xs text-neutral-500">
+          <div class="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
             <span class="hidden whitespace-nowrap tabular-nums sm:inline"
               >{item.info.width} × {item.info.height}</span
             >
@@ -94,14 +96,24 @@
   <td class="hidden sm:table-cell {cell}">{saved}</td>
   <td class="pl-3 whitespace-nowrap">
     {#if item.status === 'processing'}
-      <span class="flex items-center gap-2 text-neutral-500 tabular-nums">
+      <span class="flex items-center gap-2 text-neutral-500 tabular-nums dark:text-neutral-400">
         <span
+          role="progressbar"
+          aria-label="Processing {item.file.name}"
+          aria-valuemin={0}
+          aria-valuemax={item.progress.total || undefined}
+          aria-valuenow={item.progress.total ? item.progress.done : undefined}
+          aria-valuetext={item.progress.total
+            ? `${item.progress.done} of ${item.progress.total} files`
+            : undefined}
           class="h-1 w-12 overflow-hidden rounded-full bg-neutral-200 sm:w-16 dark:bg-neutral-800"
         >
-          <span class="block h-full bg-blue-600 transition-[width]" style:width="{fraction * 100}%"
+          <span
+            class="block h-full bg-blue-600 transition-[width] motion-reduce:transition-none"
+            style:width="{fraction * 100}%"
           ></span>
         </span>
-        <span class="hidden sm:inline"
+        <span class="hidden sm:inline" aria-hidden="true"
           >{item.progress.total ? `${item.progress.done} of ${item.progress.total}` : ''}</span
         >
       </span>
@@ -110,7 +122,7 @@
         >{item.error}</span
       >
     {:else}
-      <span class="text-neutral-500">
+      <span class="text-neutral-500 dark:text-neutral-400">
         {{ reading: 'Reading', queued: 'Queued', done: 'Done' }[item.status]}
       </span>
     {/if}
@@ -118,8 +130,9 @@
   <td>
     <button
       type="button"
-      class="ml-auto flex size-7 items-center justify-center rounded text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-900 dark:hover:text-neutral-100"
+      class="ml-auto flex size-7 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-900 dark:hover:text-neutral-100"
       aria-label="Remove {item.file.name}"
+      data-remove
       onclick={onremove}
     >
       <svg
@@ -138,7 +151,7 @@
 {#if open && item.status === 'done'}
   <tr class="border-b border-neutral-100 dark:border-neutral-900">
     <td colspan={wide.current ? 6 : 4} class="pt-1 pb-4 pl-12">
-      <ul class="grid gap-1 text-neutral-500">
+      <ul class="grid gap-1 text-neutral-500 dark:text-neutral-400">
         {#each item.outputs as output (output.name)}
           <li
             class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-4 sm:grid-cols-[minmax(0,1fr)_8rem_5rem_auto_auto]"
@@ -171,7 +184,7 @@
       {#if snippet}
         <div class="mt-3 rounded-md bg-neutral-50 dark:bg-neutral-900">
           <div
-            class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 pt-2 text-xs text-neutral-500"
+            class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 pt-2 text-xs text-neutral-500 dark:text-neutral-400"
           >
             <InlineSelect
               label="Markup"

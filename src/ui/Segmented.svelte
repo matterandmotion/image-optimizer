@@ -24,10 +24,10 @@
       aria-checked={option.value === value}
       onclick={() => onchange(option.value)}
       class={[
-        'rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-blue-600',
+        'rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 motion-reduce:transition-none',
         option.value === value
           ? 'bg-white text-neutral-900 shadow-xs dark:bg-neutral-800 dark:text-neutral-100'
-          : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100',
+          : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100',
       ]}
     >
       {option.label}
