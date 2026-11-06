@@ -1,5 +1,6 @@
 import { CancelledError, Engine } from '../engine/client'
 import type { Format, SourceInfo } from '../engine/types'
+import { HEIF_HEAD_BYTES, isHevcHeif } from '../lib/heif'
 import { GENERATOR, MANIFEST, manifest } from '../lib/manifest'
 import { outputName, slugify, uniqueBase } from '../lib/naming'
 import {
@@ -290,8 +291,10 @@ export class App {
   }
 
   private async read(item: Item) {
+    let hevc = false
     try {
-      const info = await this.probeOrDecode(item)
+      hevc = isHevcHeif(new Uint8Array(await item.file.slice(0, HEIF_HEAD_BYTES).arrayBuffer()))
+      const info = await this.probeOrDecode(item, hevc)
       const [thumb] = await this.reader.process(item.source, [
         { width: 160, format: 'webp', quality: 75 },
       ])
@@ -303,21 +306,27 @@ export class App {
     } catch (e) {
       if (e instanceof CancelledError) return
       item.status = 'error'
-      item.error = /\.(heic|heif)$/i.test(item.file.name)
-        ? 'This browser can’t open HEIC. Convert it to JPEG first, or use Safari.'
-        : 'Can’t read this file'
+      item.error =
+        hevc || /\.(heic|heif)$/i.test(item.file.name)
+          ? 'This browser can’t open HEIC. Convert it to JPEG first, or use Safari.'
+          : 'Can’t read this file'
     }
   }
 
-  /** libvips reads most files; for the rest (HEIC in Safari, BMP, …) the browser may decode. */
-  private async probeOrDecode(item: Item): Promise<SourceInfo> {
-    try {
-      return await this.reader.probe(item.file)
-    } catch (e) {
-      if (e instanceof CancelledError) throw e
-      item.source = await this.reader.decode(item.file)
-      return this.reader.probe(item.source)
-    }
+  /**
+   * libvips reads most files; for the rest (HEIC in Safari, BMP, …) the browser may decode.
+   * HEIC goes straight to the browser: libvips recognises it but has no HEVC decoder, so
+   * trying it first only costs time and logs warnings.
+   */
+  private async probeOrDecode(item: Item, hevc: boolean): Promise<SourceInfo> {
+    if (!hevc)
+      try {
+        return await this.reader.probe(item.file)
+      } catch (e) {
+        if (e instanceof CancelledError) throw e
+      }
+    item.source = await this.reader.decode(item.file)
+    return this.reader.probe(item.source)
   }
 
   private async pump() {
