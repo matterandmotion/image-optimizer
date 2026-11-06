@@ -39,3 +39,62 @@ export function save(blob: Blob, filename: string) {
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 30_000)
 }
+
+export interface ExportFile {
+  name: string
+  blob: Blob
+}
+
+type DirectoryPicker = (options?: {
+  id?: string
+  mode?: 'read' | 'readwrite'
+}) => Promise<FileSystemDirectoryHandle>
+
+const picker = (globalThis as { showDirectoryPicker?: DirectoryPicker }).showDirectoryPicker
+
+/** Whether files can be written straight into a folder (Chromium on desktop). */
+export const canSaveToFolder = typeof picker === 'function'
+
+export interface FolderResult {
+  folder: string
+  written: number
+  replaced: number
+  /** Existing files left alone because `keep` said so. */
+  kept: string[]
+}
+
+/**
+ * Asks for a folder and writes the files into it, replacing files with the same name unless
+ * `keep(existing)` says otherwise. Resolves to null if the folder picker was cancelled.
+ * Call it straight from a click: the picker needs the user's gesture.
+ */
+export async function saveToFolder(
+  files: ExportFile[],
+  keep: (existing: File) => Promise<boolean> = async () => false,
+): Promise<FolderResult | null> {
+  let dir: FileSystemDirectoryHandle
+  try {
+    // `id` makes the picker reopen in the folder used last time.
+    dir = await picker!({ id: 'image-optimizer', mode: 'readwrite' })
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return null
+    throw e
+  }
+  const result: FolderResult = { folder: dir.name, written: 0, replaced: 0, kept: [] }
+  for (const file of files) {
+    const existing = await dir
+      .getFileHandle(file.name)
+      .then((h) => h.getFile())
+      .catch(() => null)
+    if (existing && (await keep(existing))) {
+      result.kept.push(file.name)
+      continue
+    }
+    const writable = await (await dir.getFileHandle(file.name, { create: true })).createWritable()
+    await writable.write(file.blob)
+    await writable.close()
+    result.written++
+    if (existing) result.replaced++
+  }
+  return result
+}
