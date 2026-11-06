@@ -304,7 +304,7 @@ export class App {
       if (e instanceof CancelledError) return
       item.status = 'error'
       item.error = /\.(heic|heif)$/i.test(item.file.name)
-        ? 'This browser can’t open HEIC'
+        ? 'This browser can’t open HEIC. Convert it to JPEG first, or use Safari.'
         : 'Can’t read this file'
     }
   }

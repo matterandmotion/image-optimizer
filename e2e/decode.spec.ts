@@ -38,12 +38,19 @@ test('falls back to the browser for formats libvips can’t read', async ({ page
     await expect(page.getByText(name, { exact: true })).toBeVisible()
 })
 
-test('says when the browser can’t open a HEIC either', async ({ page }) => {
+test('says when the browser can’t open a HEIC either, in full on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 })
   await page.goto('/')
   await page.locator('input[type=file]').setInputFiles({
     name: 'IMG_0001.HEIC',
     mimeType: 'image/heic',
     buffer: Buffer.from('not really a HEIC file'),
   })
-  await expect(page.getByText('This browser can’t open HEIC')).toBeVisible({ timeout: 30_000 })
+  const message = page.getByText(
+    'This browser can’t open HEIC. Convert it to JPEG first, or use Safari.',
+  )
+  await expect(message).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('cell', { name: 'Failed' })).toBeVisible()
+  // Not cut off: the whole message fits its box.
+  expect(await message.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true)
 })
