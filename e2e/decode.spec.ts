@@ -54,3 +54,25 @@ test('says when the browser can’t open a HEIC either, in full on a phone', asy
   // Not cut off: the whole message fits its box.
   expect(await message.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true)
 })
+
+test('sends HEIC straight to the browser, whatever the file is called', async ({ page }) => {
+  const errors: string[] = []
+  page.on('console', (m) => {
+    if (m.type() === 'error' && m.text().trim()) errors.push(m.text())
+  })
+  await page.goto('/')
+  // A HEIF header with HEVC brands (as in an iPhone photo), named like a JPEG.
+  const head = Buffer.alloc(64)
+  head.writeUInt32BE(28, 0)
+  head.write('ftypmif1\0\0\0\0mif1heichevc', 4, 'latin1')
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'photo.jpg',
+    mimeType: 'image/jpeg',
+    buffer: head,
+  })
+  // Chromium can't decode HEIC either; libvips is never asked, so it logs nothing.
+  await expect(
+    page.getByText('This browser can’t open HEIC. Convert it to JPEG first, or use Safari.'),
+  ).toBeVisible({ timeout: 30_000 })
+  expect(errors).toEqual([])
+})
