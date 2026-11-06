@@ -36,7 +36,7 @@
   }
 
   async function copyAll() {
-    if (await copy(app.allHtml())) {
+    if (await copy(app.allSnippets())) {
       copied = true
       setTimeout(() => (copied = false), 1500)
     }
@@ -150,7 +150,7 @@
       <button type="button" class={secondary} onclick={() => input.click()}>Add images</button>
       {#if app.settings.mode === 'responsive'}
         <button type="button" class={secondary} disabled={!done || pending > 0} onclick={copyAll}>
-          {copied ? 'Copied' : 'Copy HTML'}
+          {copied ? 'Copied' : `Copy ${app.settings.markup === 'jsx' ? 'JSX' : 'HTML'}`}
         </button>
       {/if}
       <button
@@ -187,9 +187,10 @@
           <FileRow
             {item}
             role={app.roleFor(item)}
-            html={app.html(item)}
+            snippet={app.snippet(item)}
             path={app.settings.path}
-            onpath={(path) => app.setPath(path)}
+            markup={app.settings.markup}
+            onsnippet={(patch) => app.setSnippet(patch)}
             onrole={(role) => app.setRole(item, role)}
             oncompare={(output) => app.compare(item, output)}
             onremove={() => app.remove(item)}

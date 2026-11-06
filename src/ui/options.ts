@@ -1,4 +1,5 @@
 import type { Mode, QualityLevel, Role } from '../lib/plan'
+import type { Markup } from '../lib/snippet'
 
 export const MODES: readonly { value: Mode; label: string }[] = [
   { value: 'responsive', label: 'Responsive set' },
@@ -16,6 +17,11 @@ export const QUALITIES: readonly { value: QualityLevel; label: string }[] = [
   { value: 'small', label: 'Lower' },
   { value: 'balanced', label: 'Balanced' },
   { value: 'high', label: 'Higher' },
+]
+
+export const MARKUPS: readonly { value: Markup; label: string }[] = [
+  { value: 'html', label: 'HTML' },
+  { value: 'jsx', label: 'JSX' },
 ]
 
 export const MASTER_WIDTHS = [1920, 2560, 3840].map((w) => ({ value: w, label: `${w} px` }))

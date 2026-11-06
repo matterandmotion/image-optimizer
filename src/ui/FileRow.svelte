@@ -2,24 +2,28 @@
   import { MediaQuery } from 'svelte/reactivity'
   import { formatBytes, formatSaved } from '../lib/format'
   import type { Role } from '../lib/plan'
+  import type { Markup } from '../lib/snippet'
   import type { Item, Output } from './app.svelte'
-  import { copy, ROLES } from './options'
+  import InlineSelect from './InlineSelect.svelte'
+  import { copy, MARKUPS, ROLES } from './options'
 
   let {
     item,
     role,
-    html,
+    snippet,
     path,
-    onpath,
+    markup,
+    onsnippet,
     onrole,
     oncompare,
     onremove,
   }: {
     item: Item
     role: Role
-    html: string | null
+    snippet: string | null
     path: string
-    onpath: (path: string) => void
+    markup: Markup
+    onsnippet: (patch: { path?: string; markup?: Markup }) => void
     onrole: (role: Role) => void
     oncompare: (output: Output) => void
     onremove: () => void
@@ -34,8 +38,8 @@
   const saved = $derived(primary ? formatSaved(item.file.size, primary.blob.size) : '—')
   const fraction = $derived(item.progress.total ? item.progress.done / item.progress.total : 0)
 
-  async function copyHtml() {
-    if (html && (await copy(html))) {
+  async function copySnippet() {
+    if (snippet && (await copy(snippet))) {
       copied = true
       setTimeout(() => (copied = false), 1500)
     }
@@ -72,27 +76,12 @@
               >{item.info.width} × {item.info.height}</span
             >
             <span class="hidden sm:inline" aria-hidden="true">·</span>
-            <label class="relative inline-flex items-center">
-              <span class="sr-only">Role for {item.file.name}</span>
-              <select
-                class="cursor-pointer appearance-none bg-transparent pr-3.5 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-blue-600 dark:hover:text-neutral-100"
-                onchange={(e) => onrole(ROLES[e.currentTarget.selectedIndex].value)}
-              >
-                {#each ROLES as option (option.value)}
-                  <option selected={option.value === role}>{option.label}</option>
-                {/each}
-              </select>
-              <svg
-                class="pointer-events-none absolute right-0 size-3"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                aria-hidden="true"
-              >
-                <path d="m4 6 4 4 4-4" />
-              </svg>
-            </label>
+            <InlineSelect
+              label="Role for {item.file.name}"
+              value={role}
+              options={ROLES}
+              onchange={onrole}
+            />
           </div>
         {/if}
       </div>
@@ -177,10 +166,17 @@
           </li>
         {/each}
       </ul>
-      {#if html}
+      {#if snippet}
         <div class="mt-3 rounded-md bg-neutral-50 dark:bg-neutral-900">
           <div class="flex items-center gap-3 px-3 pt-2 text-xs text-neutral-500">
-            <span>HTML</span>
+            <InlineSelect
+              label="Markup"
+              title="HTML also works in Astro, Svelte and Vue templates. JSX is for React."
+              class="font-medium"
+              value={markup}
+              options={MARKUPS}
+              onchange={(markup) => onsnippet({ markup })}
+            />
             <label
               class="flex items-center gap-1.5"
               title="Where the images will live on your site"
@@ -190,19 +186,19 @@
                 class="w-28 rounded border border-neutral-200 bg-white px-1.5 py-0.5 font-mono text-neutral-900 outline-none focus-visible:outline-2 focus-visible:outline-blue-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100"
                 value={path}
                 spellcheck="false"
-                oninput={(e) => onpath(e.currentTarget.value)}
+                oninput={(e) => onsnippet({ path: e.currentTarget.value })}
               />
             </label>
             <button
               type="button"
               class="ml-auto font-medium hover:text-neutral-900 dark:hover:text-neutral-100"
-              onclick={copyHtml}
+              onclick={copySnippet}
             >
               {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
           <pre
-            class="px-3 pt-1.5 pb-3 font-mono text-xs leading-5 break-words whitespace-pre-wrap text-neutral-700 dark:text-neutral-300">{html}</pre>
+            class="px-3 pt-1.5 pb-3 font-mono text-xs leading-5 break-words whitespace-pre-wrap text-neutral-700 dark:text-neutral-300">{snippet}</pre>
         </div>
       {/if}
     </td>
