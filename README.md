@@ -2,7 +2,7 @@
 
 Resize, compress and convert images for websites, in the browser. Files are processed on your device and never uploaded.
 
-**https://image-optimizer-7ba.pages.dev**
+**https://image-optimizer.matterandmotion.studio**
 
 ## Using it
 
