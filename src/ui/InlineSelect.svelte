@@ -6,6 +6,7 @@
     options,
     onchange,
     title,
+    disabled = false,
     class: className = '',
   }: {
     /** For screen readers; not shown. */
@@ -14,6 +15,7 @@
     options: readonly { value: T; label: string }[]
     onchange: (value: T) => void
     title?: string
+    disabled?: boolean
     class?: string
   } = $props()
 </script>
@@ -21,7 +23,8 @@
 <label class="relative inline-flex items-center" {title}>
   <span class="sr-only">{label}</span>
   <select
-    class="cursor-pointer appearance-none bg-transparent pr-3.5 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-blue-600 dark:hover:text-neutral-100 {className}"
+    class="cursor-pointer appearance-none bg-transparent pr-3.5 focus-visible:outline-2 focus-visible:outline-blue-600 enabled:hover:text-neutral-900 disabled:cursor-default dark:enabled:hover:text-neutral-100 {className}"
+    {disabled}
     onchange={(e) => onchange(options[e.currentTarget.selectedIndex].value)}
   >
     {#each options as option (option.value)}

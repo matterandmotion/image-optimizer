@@ -15,6 +15,7 @@
     path,
     markup,
     placeholder,
+    locked,
     onsnippet,
     onrole,
     oncompare,
@@ -26,6 +27,8 @@
     path: string
     markup: Markup
     placeholder: boolean
+    /** While optimizing: the role can't change. */
+    locked: boolean
     onsnippet: (patch: { path?: string; markup?: Markup; placeholder?: boolean }) => void
     onrole: (role: Role) => void
     oncompare: (output: Output) => void
@@ -84,6 +87,7 @@
               label="Role for {item.file.name}"
               value={role}
               options={ROLES}
+              disabled={locked}
               onchange={onrole}
             />
           </div>
@@ -125,7 +129,7 @@
       <span class="text-red-600 dark:text-red-400">Failed</span>
     {:else}
       <span class="text-neutral-500 dark:text-neutral-400">
-        {{ reading: 'Reading', queued: 'Queued', done: 'Done' }[item.status]}
+        {{ reading: 'Reading', ready: 'Ready', queued: 'Queued', done: 'Done' }[item.status]}
       </span>
     {/if}
   </td>

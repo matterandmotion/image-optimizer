@@ -60,6 +60,9 @@ test('works offline after the first visit', async ({ page }) => {
     mimeType: 'image/jpeg',
     buffer: jpeg,
   })
+  // A responsive set, so the AVIF encoder is used too.
+  await page.getByRole('radio', { name: 'Responsive set' }).click()
+  await page.getByRole('button', { name: 'Optimize 1 image' }).click()
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   await page.getByRole('button', { name: 'photo.jpg', exact: true }).click()
   await expect(page.getByText('photo-1000w.avif', { exact: true })).toBeVisible()

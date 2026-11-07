@@ -16,6 +16,9 @@ test('makes a responsive set, a ZIP and a CMS master', async ({ page, context })
     mimeType: 'image/jpeg',
     buffer: await makeJpeg(page, 1000, 600),
   })
+  await expect(page.getByRole('radio', { name: 'CMS master' })).toBeChecked()
+  await page.getByRole('radio', { name: 'Responsive set' }).click()
+  await page.getByRole('button', { name: 'Optimize 1 image' }).click()
 
   // Content role, 1000 px source: 400, 800 and 1000 px, as AVIF + JPEG
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
@@ -33,7 +36,7 @@ test('makes a responsive set, a ZIP and a CMS master', async ({ page, context })
     '<img src="/images/hero-shot-1000w.jpg"',
   )
 
-  // JSX markup: React prop names; the choice is remembered
+  // JSX markup: React prop names; the choice is remembered, unlike the output
   await page.getByLabel('Markup').selectOption('JSX')
   await expect(page.locator('pre')).toContainText(
     '<source type="image/avif" srcSet="/images/hero-shot-400w.avif 400w',
@@ -43,9 +46,11 @@ test('makes a responsive set, a ZIP and a CMS master', async ({ page, context })
   expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(
     /^\{\/\* Hero Shot\.jpg \*\/\}\n<picture>/,
   )
-  expect(
-    await page.evaluate(() => JSON.parse(localStorage.getItem('image-optimizer:settings')!).markup),
-  ).toBe('jsx')
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('image-optimizer:settings')!),
+  )
+  expect(stored.markup).toBe('jsx')
+  expect(stored).not.toHaveProperty('mode')
 
   // average-colour placeholder, as an inline style
   await page.getByLabel('Placeholder').check()
@@ -76,11 +81,20 @@ test('makes a responsive set, a ZIP and a CMS master', async ({ page, context })
   ])
   expect(download.suggestedFilename()).toBe('images.zip')
 
-  // Switching mode re-processes; the row stays expanded.
+  // Switching mode runs nothing until Optimize; then the row opens on the new files.
   await page.getByRole('radio', { name: 'CMS master' }).click()
+  await expect(page.getByRole('cell', { name: 'Ready' })).toBeVisible()
+  await expect(page.getByRole('progressbar')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Optimize 1 image' }).click()
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   await expect(page.getByText('hero-shot.jpg', { exact: true })).toBeVisible()
   await expect(page.getByText('hero-shot-400w.avif', { exact: true })).toHaveCount(0)
+
+  // Switching back brings the responsive set back, without another run.
+  await page.getByRole('radio', { name: 'Responsive set' }).click()
+  await expect(page.getByRole('cell', { name: 'Done' })).toBeVisible()
+  await expect(page.getByText('hero-shot-400w.avif', { exact: true })).toBeVisible()
+  await expect(page.getByRole('progressbar')).toHaveCount(0)
 
   expect(errors).toEqual([])
 })
@@ -92,14 +106,18 @@ test('detects a flat graphic and gives it lossless WebP + PNG', async ({ page })
     mimeType: 'image/png',
     buffer: await makePng(page, 1800, 900),
   })
+  await page.getByRole('radio', { name: 'Responsive set' }).click()
+  await page.getByRole('button', { name: 'Optimize 1 image' }).click()
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   await expect(page.getByLabel('Role for logo.png')).toHaveValue('Graphic')
   await page.getByRole('button', { name: 'logo.png', exact: true }).click()
   for (const name of ['logo-800w.webp', 'logo-800w.png', 'logo-1600w.webp', 'logo-1600w.png'])
     await expect(page.getByText(name, { exact: true })).toBeVisible()
 
-  // overriding the role re-processes just this image
+  // overriding the role needs another Optimize, for just this image
   await page.getByLabel('Role for logo.png').selectOption('Content')
+  await expect(page.getByRole('cell', { name: 'Ready' })).toBeVisible()
+  await page.getByRole('button', { name: 'Optimize 1 image' }).click()
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   await expect(page.getByText('logo-1600w.avif', { exact: true })).toBeVisible()
 })
@@ -146,6 +164,8 @@ test('saves into a folder, leaving a foreign manifest.json alone', async ({ page
     mimeType: 'image/jpeg',
     buffer: await makeJpeg(page, 1000, 600),
   })
+  await page.getByRole('radio', { name: 'Responsive set' }).click()
+  await page.getByRole('button', { name: 'Optimize 1 image' }).click()
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   await page.getByRole('button', { name: 'Save to folder' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
@@ -179,4 +199,40 @@ test('saves into a folder, leaving a foreign manifest.json alone', async ({ page
   await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
     'Saved 7 files to “site”, replacing 7.',
   )
+})
+
+test('waits for Optimize, locks the settings while it runs, and can stop', async ({ page }) => {
+  await page.goto('/')
+  const jpeg = await makeJpeg(page, 3000, 2000)
+  await page
+    .locator('input[type=file]')
+    .setInputFiles(
+      ['a.jpg', 'b.jpg', 'c.jpg'].map((name) => ({ name, mimeType: 'image/jpeg', buffer: jpeg })),
+    )
+
+  // Listed and read, but nothing is made until Optimize.
+  await expect(page.getByRole('cell', { name: 'Ready' })).toHaveCount(3, { timeout: 30_000 })
+  await expect(page.getByText('3 images', { exact: true })).toBeVisible()
+  await expect(page.getByRole('progressbar')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Download ZIP' })).toHaveCount(0)
+
+  await page.getByRole('radio', { name: 'Responsive set' }).click()
+  await page.getByRole('button', { name: 'Optimize 3 images' }).click()
+  await expect(page.getByRole('progressbar')).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'CMS master' })).toBeDisabled()
+  await expect(page.getByLabel(/^Quality/)).toBeDisabled()
+  await expect(page.getByLabel('Role for b.jpg')).toBeDisabled()
+
+  // Stop: nothing is queued or running, and the settings unlock.
+  await page.getByRole('button', { name: 'Stop' }).click()
+  const optimize = page.getByRole('button', { name: /^Optimize \d images?$/ })
+  await expect(optimize).toBeFocused()
+  await expect(page.getByRole('progressbar')).toHaveCount(0)
+  await expect(page.getByRole('cell', { name: 'Queued' })).toHaveCount(0)
+  await expect(page.getByRole('radio', { name: 'CMS master' })).toBeEnabled()
+
+  // Optimize again finishes the rest; the same button then downloads.
+  await optimize.click()
+  await expect(page.getByText(/^3 done/)).toBeVisible({ timeout: 120_000 })
+  await expect(page.getByRole('button', { name: 'Download ZIP' })).toBeFocused()
 })

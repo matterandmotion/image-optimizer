@@ -15,6 +15,8 @@ test('every control shows a focus ring when tabbed to', async ({ page }) => {
     mimeType: 'image/jpeg',
     buffer: Buffer.from(jpeg),
   })
+  await page.getByRole('radio', { name: 'Responsive set' }).click()
+  await page.getByRole('button', { name: 'Optimize 1 image' }).click()
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   await page.getByRole('button', { name: 'photo.jpg', exact: true }).click()
   await page.locator('h1').click()
