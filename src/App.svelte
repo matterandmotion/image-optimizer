@@ -17,6 +17,7 @@
 
   let input: HTMLInputElement
   let dropzone: HTMLButtonElement | undefined = $state()
+  let nextButton: HTMLButtonElement | undefined = $state()
   let table: HTMLTableElement | undefined = $state()
   let dragging = $state(false)
   let zipping = $state(false)
@@ -29,7 +30,51 @@
   const totals = $derived(app.totals)
   const done = $derived(app.done.length)
   const failed = $derived(app.items.filter((i) => i.status === 'error').length)
-  const pending = $derived(app.items.length - done - failed)
+  const toOptimize = $derived(app.toOptimize)
+  const optimizing = $derived(app.optimizing)
+  /** Everything is made with the current settings: the files can be downloaded. */
+  const finished = $derived(done > 0 && !toOptimize && !optimizing)
+  const progress = $derived(describeProgress(app.items.length - failed))
+
+  // One button for the next step, Optimize and then Download ZIP, so focus stays put between them.
+  const next = $derived(
+    optimizing
+      ? { label: 'Optimizing…', disabled: true }
+      : toOptimize
+        ? {
+            label: `Optimize ${toOptimize} ${toOptimize === 1 ? 'image' : 'images'}`,
+            disabled: false,
+          }
+        : done
+          ? { label: zipping ? 'Preparing…' : 'Download ZIP', disabled: zipping }
+          : { label: 'Optimize', disabled: true },
+  )
+
+  function describeProgress(count: number): string {
+    const parts = []
+    if (count)
+      parts.push(
+        optimizing || (done && done < count)
+          ? `${done} of ${count} done`
+          : done
+            ? `${done} done`
+            : `${count} ${count === 1 ? 'image' : 'images'}`,
+      )
+    if (failed) parts.push(`${failed} couldn’t be read`)
+    return parts.join(' · ')
+  }
+
+  function step() {
+    if (next.disabled) return
+    if (toOptimize) app.optimize()
+    else void downloadZip()
+  }
+
+  async function stop() {
+    app.stop()
+    await tick()
+    nextButton?.focus()
+  }
 
   function describe(s: PlanSettings): string {
     if (s.mode === 'master')
@@ -116,7 +161,7 @@
   }
 
   const button =
-    'rounded-md px-3 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-40'
+    'rounded-md px-3 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-40 aria-disabled:cursor-default aria-disabled:opacity-40'
   const secondary = `${button} border border-neutral-200 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900`
   const primary = `${button} bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200`
 </script>
@@ -176,6 +221,7 @@
           label="Output"
           value={app.settings.mode}
           options={MODES}
+          disabled={optimizing}
           onchange={(mode) => app.set({ mode })}
         />
         {#if app.settings.mode === 'responsive'}
@@ -183,12 +229,14 @@
             label="Role"
             value={app.settings.role}
             options={ROLES}
+            disabled={optimizing}
             onchange={(role) => app.set({ role })}
           />
           <Select
             label="Quality"
             value={app.settings.quality}
             options={QUALITIES}
+            disabled={optimizing}
             onchange={(quality) => app.set({ quality })}
           />
         {:else}
@@ -196,39 +244,36 @@
             label="Max width"
             value={app.settings.masterWidth}
             options={MASTER_WIDTHS}
+            disabled={optimizing}
             onchange={(masterWidth) => app.set({ masterWidth })}
           />
         {/if}
         <!-- The actions wrap as one group, after the settings. -->
         <div class="flex flex-wrap gap-2 sm:ml-auto">
           <button type="button" class={secondary} onclick={() => input.click()}>Add images</button>
-          {#if app.settings.mode === 'responsive'}
-            <button
-              type="button"
-              class={secondary}
-              disabled={!done || pending > 0}
-              onclick={copyAll}
-            >
-              {copied ? 'Copied' : `Copy ${app.settings.markup === 'jsx' ? 'JSX' : 'HTML'}`}
-            </button>
+          {#if optimizing}
+            <button type="button" class={secondary} onclick={stop}>Stop</button>
+          {:else if finished}
+            {#if app.settings.mode === 'responsive'}
+              <button type="button" class={secondary} onclick={copyAll}>
+                {copied ? 'Copied' : `Copy ${app.settings.markup === 'jsx' ? 'JSX' : 'HTML'}`}
+              </button>
+            {/if}
+            {#if canSaveToFolder}
+              <button type="button" class={secondary} disabled={saving} onclick={saveFolder}>
+                {saving ? 'Saving…' : 'Save to folder'}
+              </button>
+            {/if}
           {/if}
-          {#if canSaveToFolder}
-            <button
-              type="button"
-              class={secondary}
-              disabled={!done || pending > 0 || saving}
-              onclick={saveFolder}
-            >
-              {saving ? 'Saving…' : 'Save to folder'}
-            </button>
-          {/if}
+          <!-- aria-disabled, not disabled: a disabled button would drop focus. -->
           <button
+            bind:this={nextButton}
             type="button"
             class={primary}
-            disabled={!done || pending > 0 || zipping}
-            onclick={downloadZip}
+            aria-disabled={next.disabled}
+            onclick={step}
           >
-            {zipping ? 'Preparing…' : 'Download ZIP'}
+            {next.label}
           </button>
         </div>
       </div>
@@ -269,6 +314,7 @@
               path={app.settings.path}
               markup={app.settings.markup}
               placeholder={app.settings.placeholder}
+              locked={optimizing}
               onsnippet={(patch) => app.setSnippet(patch)}
               onrole={(role) => app.setRole(item, role)}
               oncompare={(output) => app.compare(item, output)}
@@ -282,11 +328,7 @@
         class="mt-4 flex items-center justify-between gap-4 text-sm text-neutral-500 tabular-nums dark:text-neutral-400"
         aria-live="polite"
       >
-        <span>
-          {pending ? `${done} of ${done + pending} done` : `${done} done`}{failed
-            ? ` · ${failed} couldn’t be read`
-            : ''}
-        </span>
+        <span>{progress}</span>
         <span class="flex items-center gap-4">
           {#if done && totals.original > totals.output}
             <span

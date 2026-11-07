@@ -30,12 +30,12 @@ test('falls back to the browser for formats libvips can’t read', async ({ page
     mimeType: 'image/bmp',
     buffer: bmp(1000, 600),
   })
+  await page.getByRole('button', { name: 'Optimize 1 image' }).click()
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   await expect(page.getByText('1000 × 600')).toBeVisible()
   await page.getByRole('button', { name: 'scan.bmp', exact: true }).click()
-  // Opaque, so it's a photo with a JPEG fallback, not a transparent image with WebP.
-  for (const name of ['scan-1000w.avif', 'scan-1000w.jpg'])
-    await expect(page.getByText(name, { exact: true })).toBeVisible()
+  // Opaque, so a JPEG master, not a PNG.
+  await expect(page.getByText('scan.jpg', { exact: true })).toBeVisible()
 })
 
 test('says when the browser can’t open a HEIC either, in full on a phone', async ({ page }) => {

@@ -21,6 +21,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
       // A failed row, for the contrast of its message.
       { name: 'broken.heic', mimeType: 'image/heic', buffer: Buffer.from('not a HEIC') },
     ])
+    // Listed, waiting for Optimize.
+    await expect(page.getByRole('cell', { name: 'Ready' })).toHaveCount(2, { timeout: 30_000 })
+    expect(await violations(page), 'ready').toEqual([])
+
+    await page.getByRole('radio', { name: 'Responsive set' }).click()
+    await page.getByRole('button', { name: 'Optimize 2 images' }).click()
     // While processing: the progress bar needs a name.
     await expect(page.getByRole('progressbar', { name: 'Processing photo.jpg' })).toBeVisible()
     expect(await violations(page), 'processing').toEqual([])
@@ -42,6 +48,7 @@ test('focus stays on the list when rows are removed', async ({ page }) => {
     { name: 'b.jpg', mimeType: 'image/jpeg', buffer: await makeJpeg(page, 600, 400) },
     { name: 'c.jpg', mimeType: 'image/jpeg', buffer: await makeJpeg(page, 600, 400) },
   ])
+  await page.getByRole('button', { name: 'Optimize 3 images' }).click()
   await expect(page.getByText(/^3 done/)).toBeVisible({ timeout: 90_000 })
   const remove = (name: string) => page.getByRole('button', { name: `Remove ${name}` })
 
@@ -73,6 +80,8 @@ test('copying is announced', async ({ page, context }) => {
     mimeType: 'image/jpeg',
     buffer: await makeJpeg(page, 600, 400),
   })
+  await page.getByRole('radio', { name: 'Responsive set' }).click()
+  await page.getByRole('button', { name: 'Optimize 1 image' }).click()
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   const announced = page.getByRole('status').filter({ hasText: 'Copied to the clipboard.' })
 

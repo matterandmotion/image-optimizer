@@ -25,9 +25,10 @@ describe('planWidths', () => {
 
 describe('planVariants', () => {
   const photo = { width: 4000, hasAlpha: false }
+  const responsive = { ...DEFAULT_SETTINGS, mode: 'responsive' } as const
 
   it('responsive photo: AVIF + JPEG at each width', () => {
-    const v = planVariants(photo, DEFAULT_SETTINGS)
+    const v = planVariants(photo, responsive)
     expect(v.map((x) => `${x.width} ${x.format}`)).toEqual([
       '400 avif',
       '400 jpeg',
@@ -41,15 +42,12 @@ describe('planVariants', () => {
   })
 
   it('transparent photo falls back to WebP instead of JPEG', () => {
-    const v = planVariants({ width: 1000, hasAlpha: true }, { ...DEFAULT_SETTINGS, role: 'card' })
+    const v = planVariants({ width: 1000, hasAlpha: true }, { ...responsive, role: 'card' })
     expect(v.map((x) => x.format)).toEqual(['avif', 'webp', 'avif', 'webp'])
   })
 
   it('graphics: lossless WebP + PNG', () => {
-    const v = planVariants(
-      { width: 2400, hasAlpha: true },
-      { ...DEFAULT_SETTINGS, role: 'graphic' },
-    )
+    const v = planVariants({ width: 2400, hasAlpha: true }, { ...responsive, role: 'graphic' })
     expect(v).toEqual([
       { width: 800, format: 'webp', quality: 100, lossless: true },
       { width: 800, format: 'png', quality: 100 },
@@ -58,19 +56,16 @@ describe('planVariants', () => {
     ])
   })
 
-  it('master: one high-quality JPEG capped at the master width', () => {
-    expect(planVariants(photo, { ...DEFAULT_SETTINGS, mode: 'master' })).toEqual([
+  it('master (the default): one high-quality JPEG capped at the master width', () => {
+    expect(planVariants(photo, DEFAULT_SETTINGS)).toEqual([
       { width: 2560, format: 'jpeg', quality: 90 },
     ])
-    expect(
-      planVariants({ width: 1800, hasAlpha: false }, { ...DEFAULT_SETTINGS, mode: 'master' })[0]
-        .width,
-    ).toBe(1800)
+    expect(planVariants({ width: 1800, hasAlpha: false }, DEFAULT_SETTINGS)[0].width).toBe(1800)
   })
 
   it('master: PNG for transparency', () => {
-    expect(
-      planVariants({ width: 900, hasAlpha: true }, { ...DEFAULT_SETTINGS, mode: 'master' }),
-    ).toEqual([{ width: 900, format: 'png', quality: 100 }])
+    expect(planVariants({ width: 900, hasAlpha: true }, DEFAULT_SETTINGS)).toEqual([
+      { width: 900, format: 'png', quality: 100 },
+    ])
   })
 })
