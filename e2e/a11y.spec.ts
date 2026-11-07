@@ -84,3 +84,40 @@ test('copying is announced', async ({ page, context }) => {
   await page.getByRole('button', { name: 'Copy', exact: true }).click()
   await expect(announced).toBeAttached()
 })
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`dropdown options are readable in ${colorScheme} mode`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme })
+    await page.goto('/')
+    await page.locator('input[type=file]').setInputFiles({
+      name: 'photo.jpg',
+      mimeType: 'image/jpeg',
+      buffer: await makeJpeg(page, 600, 400),
+    })
+    await expect(page.getByLabel('Role for photo.jpg')).toBeVisible({ timeout: 30_000 })
+
+    // The open list is drawn by the browser, outside the page, so check the options' own colours.
+    // Under a transparent option, Chrome's list is white.
+    const ratios = await page.locator('option').evaluateAll((options) => {
+      const ctx = new OffscreenCanvas(1, 1).getContext('2d', { willReadFrequently: true })!
+      const luminance = (colour: string) => {
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(0, 0, 1, 1)
+        ctx.fillStyle = colour
+        ctx.fillRect(0, 0, 1, 1)
+        const [r, g, b] = [...ctx.getImageData(0, 0, 1, 1).data].map((v) => {
+          const c = v / 255
+          return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+        })
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+      }
+      return options.map((o) => {
+        const s = getComputedStyle(o)
+        const [a, b] = [luminance(s.color), luminance(s.backgroundColor)].sort((x, y) => y - x)
+        return { option: o.textContent, ratio: Math.round(((a + 0.05) / (b + 0.05)) * 10) / 10 }
+      })
+    })
+    expect(ratios.length).toBeGreaterThan(0)
+    expect(ratios.filter((r) => r.ratio < 4.5)).toEqual([])
+  })
+}
