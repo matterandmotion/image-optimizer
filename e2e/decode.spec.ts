@@ -30,12 +30,12 @@ test('falls back to the browser for formats libvips can’t read', async ({ page
     mimeType: 'image/bmp',
     buffer: bmp(1000, 600),
   })
+  await page.getByRole('button', { name: 'Optimize 1 image' }).click()
   await expect(page.getByText(/^1 done/)).toBeVisible({ timeout: 90_000 })
   await expect(page.getByText('1000 × 600')).toBeVisible()
   await page.getByRole('button', { name: 'scan.bmp', exact: true }).click()
-  // Opaque, so it's a photo with a JPEG fallback, not a transparent image with WebP.
-  for (const name of ['scan-1000w.avif', 'scan-1000w.jpg'])
-    await expect(page.getByText(name, { exact: true })).toBeVisible()
+  // Opaque, so a JPEG master, not a PNG.
+  await expect(page.getByText('scan.jpg', { exact: true })).toBeVisible()
 })
 
 test('says when the browser can’t open a HEIC either, in full on a phone', async ({ page }) => {
@@ -53,4 +53,26 @@ test('says when the browser can’t open a HEIC either, in full on a phone', asy
   await expect(page.getByRole('cell', { name: 'Failed' })).toBeVisible()
   // Not cut off: the whole message fits its box.
   expect(await message.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true)
+})
+
+test('sends HEIC straight to the browser, whatever the file is called', async ({ page }) => {
+  const errors: string[] = []
+  page.on('console', (m) => {
+    if (m.type() === 'error' && m.text().trim()) errors.push(m.text())
+  })
+  await page.goto('/')
+  // A HEIF header with HEVC brands (as in an iPhone photo), named like a JPEG.
+  const head = Buffer.alloc(64)
+  head.writeUInt32BE(28, 0)
+  head.write('ftypmif1\0\0\0\0mif1heichevc', 4, 'latin1')
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'photo.jpg',
+    mimeType: 'image/jpeg',
+    buffer: head,
+  })
+  // Chromium can't decode HEIC either; libvips is never asked, so it logs nothing.
+  await expect(
+    page.getByText('This browser can’t open HEIC. Convert it to JPEG first, or use Safari.'),
+  ).toBeVisible({ timeout: 30_000 })
+  expect(errors).toEqual([])
 })

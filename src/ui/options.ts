@@ -2,8 +2,8 @@ import type { Mode, QualityLevel, Role } from '../lib/plan'
 import type { Markup } from '../lib/snippet'
 
 export const MODES: readonly { value: Mode; label: string }[] = [
-  { value: 'responsive', label: 'Responsive set' },
   { value: 'master', label: 'CMS master' },
+  { value: 'responsive', label: 'Responsive set' },
 ]
 
 export const ROLES: readonly { value: Role; label: string }[] = [

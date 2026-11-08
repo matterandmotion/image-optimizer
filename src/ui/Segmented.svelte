@@ -4,11 +4,13 @@
     value,
     options,
     onchange,
+    disabled = false,
   }: {
     label: string
     value: T
     options: readonly { value: T; label: string }[]
     onchange: (value: T) => void
+    disabled?: boolean
   } = $props()
 </script>
 
@@ -22,12 +24,13 @@
       type="button"
       role="radio"
       aria-checked={option.value === value}
+      {disabled}
       onclick={() => onchange(option.value)}
       class={[
-        'rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 motion-reduce:transition-none',
+        'rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-50 motion-reduce:transition-none',
         option.value === value
           ? 'bg-white text-neutral-900 shadow-xs dark:bg-neutral-800 dark:text-neutral-100'
-          : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100',
+          : 'text-neutral-600 enabled:hover:text-neutral-900 dark:text-neutral-400 dark:enabled:hover:text-neutral-100',
       ]}
     >
       {option.label}

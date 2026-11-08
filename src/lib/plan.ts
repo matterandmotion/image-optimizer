@@ -20,7 +20,7 @@ export interface PlanSettings {
 }
 
 export const DEFAULT_SETTINGS: PlanSettings = {
-  mode: 'responsive',
+  mode: 'master',
   role: 'content',
   quality: 'balanced',
   masterWidth: 2560,

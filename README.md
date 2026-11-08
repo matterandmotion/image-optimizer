@@ -2,14 +2,16 @@
 
 Resize, compress and convert images for websites, in the browser. Files are processed on your device and never uploaded.
 
-**https://image-optimizer-7ba.pages.dev**
+**https://image-optimizer.matterandmotion.studio**
 
 ## Using it
 
-Drop images or folders on the page, choose files, or paste. Then pick an output:
+Drop images or folders on the page, choose files, or paste. They're listed, and nothing is made until you press **Optimize**. Pick an output first:
 
+- **CMS master** (the default): one high-quality file per image, no wider than a maximum width. For a CMS or site builder that makes its own sizes (Wagtail, Payload, Webflow, Framer, …), so the stored original isn't needlessly large.
 - **Responsive set**: several widths of each image in modern formats, plus `<picture>` markup to paste into your site. For sites you build yourself.
-- **CMS master**: one high-quality file per image, no wider than a maximum width. For a CMS or site builder that makes its own sizes (Wagtail, Payload, Webflow, Framer, …), so the stored original isn't needlessly large.
+
+The settings are locked while images are being optimized; _Stop_ ends the run. Changing a setting afterwards doesn't run anything: press Optimize again. If you switch back to settings an image was already optimized with, its files come back without another run.
 
 Download everything as a ZIP, or single files from a row. In Chrome and Edge, _Save to folder_ writes everything straight into a folder you pick, such as your site's `public/images`. Tap a thumbnail to compare an output with the original: drag the divider and switch between fit and actual pixels.
 
@@ -54,7 +56,7 @@ Reads JPEG, PNG, WebP, AVIF, GIF (first frame) and TIFF. Other formats are hande
 
 Images are decoded, resized and encoded on your device, in the page. The Content Security Policy (`connect-src 'self'`) stops the page from sending data to any other server, and there are no analytics, trackers or third-party scripts. The font is served from the same site.
 
-Your settings (output, role, quality, maximum width, path, markup, placeholder) are kept in your browser's local storage. A service worker keeps a copy of the app in the browser's cache, so it works offline; it only ever fetches the app's own files.
+Your settings (role, quality, maximum width, path, markup, placeholder) are kept in your browser's local storage. The output isn't: each visit starts on CMS master. A service worker keeps a copy of the app in the browser's cache, so it works offline; it only ever fetches the app's own files.
 
 ## Development
 
